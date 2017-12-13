@@ -38,6 +38,13 @@ import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+/**
+ * Keep the measures in memory during refresh of live measures:
+ * <ul>
+ *   <li>the values of last analysis, restricted to the needed metrics</li>
+ *   <li>the refreshed values</li>
+ * </ul>
+ */
 class MeasureMatrix {
 
   // component uuid -> metric key -> measure
@@ -60,10 +67,6 @@ class MeasureMatrix {
     for (LiveMeasureDto dbMeasure : dbMeasures) {
       table.put(dbMeasure.getComponentUuid(), metricsByIds.get(dbMeasure.getMetricId()).getKey(), new MeasureCell(dbMeasure, false));
     }
-  }
-
-  ComponentDto getProject() {
-    return bottomUpComponents.get(bottomUpComponents.size() - 1);
   }
 
   Stream<ComponentDto> getBottomUpComponents() {

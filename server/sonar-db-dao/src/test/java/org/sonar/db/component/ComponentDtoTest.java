@@ -23,9 +23,9 @@ import org.junit.Test;
 import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.resources.Scopes;
 import org.sonar.db.organization.OrganizationDto;
-import org.sonar.db.organization.OrganizationTesting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.sonar.db.organization.OrganizationTesting.newOrganizationDto;
 
 public class ComponentDtoTest {
 
@@ -90,14 +90,14 @@ public class ComponentDtoTest {
   }
 
   @Test
-  public void test_formatUuidPathFromParent() {
-    ComponentDto parent = ComponentTesting.newPrivateProjectDto(OrganizationTesting.newOrganizationDto(), "123").setUuidPath(ComponentDto.UUID_PATH_OF_ROOT);
+  public void formatUuidPathFromParent() {
+    ComponentDto parent = ComponentTesting.newPrivateProjectDto(newOrganizationDto(), "123").setUuidPath(ComponentDto.UUID_PATH_OF_ROOT);
     assertThat(ComponentDto.formatUuidPathFromParent(parent)).isEqualTo(".123.");
   }
 
   @Test
-  public void test_getUuidPathLikeIncludingSelf() {
-    OrganizationDto organizationDto = OrganizationTesting.newOrganizationDto();
+  public void getUuidPathLikeIncludingSelf() {
+    OrganizationDto organizationDto = newOrganizationDto();
 
     ComponentDto project = ComponentTesting.newPrivateProjectDto(organizationDto).setUuidPath(ComponentDto.UUID_PATH_OF_ROOT);
     assertThat(project.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + ".%");
@@ -110,7 +110,7 @@ public class ComponentDtoTest {
   }
 
   @Test
-  public void test_Name() {
+  public void getUuidPathAsList() {
     ComponentDto root = new ComponentDto().setUuidPath(ComponentDto.UUID_PATH_OF_ROOT);
     assertThat(root.getUuidPathAsList()).isEmpty();
 
@@ -119,7 +119,7 @@ public class ComponentDtoTest {
   }
 
   @Test
-  public void test_getKey_and_getBranch() {
+  public void getKey_and_getBranch() {
     ComponentDto underTest = new ComponentDto().setDbKey("my_key:BRANCH:my_branch");
     assertThat(underTest.getKey()).isEqualTo("my_key");
     assertThat(underTest.getBranch()).isEqualTo("my_branch");

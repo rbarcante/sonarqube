@@ -725,7 +725,7 @@ public class IssueMetricFormulaFactoryImplTest {
   }
 
   private static IssueCounter newIssueCounter(IssueGroupDto... issues) {
-    return new IssueCounterImpl(asList(issues));
+    return new IssueCounter(asList(issues));
   }
 
   private static IssueGroupDto newGroup() {

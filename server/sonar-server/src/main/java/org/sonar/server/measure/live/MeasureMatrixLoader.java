@@ -66,5 +66,6 @@ public class MeasureMatrixLoader {
     List<LiveMeasureDto> dbMeasures = dbClient.liveMeasureDao().selectByComponentUuidsAndMetricIds(dbSession,
       Lists.transform(bottomUpComponents, ComponentDto::uuid),
       metricsPerId.keySet());
-    return new MeasureMatrix(bottomUpComponents, metricDtos, dbMeasures);  }
+    return new MeasureMatrix(bottomUpComponents, metricDtos, dbMeasures);
+  }
 }

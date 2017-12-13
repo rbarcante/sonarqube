@@ -57,21 +57,22 @@ public class OneBugIssuePerLineSensor implements Sensor {
     }
   }
 
-  private void createIssues(InputFile file, SensorContext context, String repo) {
+  private static void createIssues(InputFile file, SensorContext context, String repo) {
     RuleKey ruleKey = RuleKey.of(repo, RULE_KEY);
     for (int line = 1; line <= file.lines(); line++) {
       TextRange text = file.selectLine(line);
       // do not count empty lines, which can be a pain with end-of-file return
-      if (text.end().lineOffset() > 0) {
-        NewIssue newIssue = context.newIssue();
-        newIssue
-          .forRule(ruleKey)
-          .at(newIssue.newLocation()
-            .on(file)
-            .at(text)
-            .message("This bug issue is generated on each line"))
-          .save();
+      if (text.end().lineOffset() == 0) {
+        continue;
       }
+      NewIssue newIssue = context.newIssue();
+      newIssue
+        .forRule(ruleKey)
+        .at(newIssue.newLocation()
+          .on(file)
+          .at(text)
+          .message("This bug issue is generated on each line"))
+        .save();
     }
   }
 

@@ -73,7 +73,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     DebtRatingGrid debtRatingGrid = new DebtRatingGrid(config);
 
     matrix.getBottomUpComponents().forEach(c -> {
-      IssueCounterImpl issueCounter = new IssueCounterImpl(dbClient.issueDao().selectGroupsOfComponentTreeOnLeak(dbSession, c, beginningOfLeakPeriod.orElse(Long.MAX_VALUE)));
+      IssueCounter issueCounter = new IssueCounter(dbClient.issueDao().selectIssueGroupsByBaseComponent(dbSession, c, beginningOfLeakPeriod.orElse(Long.MAX_VALUE)));
       FormulaContextImpl context = new FormulaContextImpl(matrix, debtRatingGrid);
       for (IssueMetricFormula formula : formulaFactory.getFormulas()) {
         // exclude leak formulas when leak period is not defined
@@ -89,7 +89,6 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     });
 
     // persist the measures that have been created or updated
-    // TODO test concurrency (CE deletes or updates the row)
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
     dbSession.commit();
   }

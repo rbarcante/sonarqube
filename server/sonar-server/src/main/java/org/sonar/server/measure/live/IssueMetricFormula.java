@@ -29,37 +29,37 @@ import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 
 import static java.util.Collections.emptyList;
 
-public class IssueMetricFormula {
+class IssueMetricFormula {
 
   private final Metric metric;
   private final boolean onLeak;
   private final BiConsumer<Context, IssueCounter> formula;
   private final Collection<Metric> dependentMetrics;
 
-  public IssueMetricFormula(Metric metric, boolean onLeak, BiConsumer<Context, IssueCounter> formula) {
+  IssueMetricFormula(Metric metric, boolean onLeak, BiConsumer<Context, IssueCounter> formula) {
     this(metric, onLeak, formula, emptyList());
   }
 
-  public IssueMetricFormula(Metric metric, boolean onLeak, BiConsumer<Context, IssueCounter> formula, Collection<Metric> dependentMetrics) {
+  IssueMetricFormula(Metric metric, boolean onLeak, BiConsumer<Context, IssueCounter> formula, Collection<Metric> dependentMetrics) {
     this.metric = metric;
     this.onLeak = onLeak;
     this.formula = formula;
     this.dependentMetrics = dependentMetrics;
   }
 
-  public Metric getMetric() {
+  Metric getMetric() {
     return metric;
   }
 
-  public boolean isOnLeak() {
+  boolean isOnLeak() {
     return onLeak;
   }
 
-  public Collection<Metric> getDependentMetrics() {
+  Collection<Metric> getDependentMetrics() {
     return dependentMetrics;
   }
 
-  public void compute(Context context, IssueCounter issues) {
+  void compute(Context context, IssueCounter issues) {
     formula.accept(context, issues);
   }
 
@@ -69,9 +69,10 @@ public class IssueMetricFormula {
     DebtRatingGrid getDebtRatingGrid();
 
     /**
-     * FIXME improve description
-     * If the requested metric is based on issues, then returns the value just computed, else
-     * returns the value computed during last analysis.
+     * Value that was just refreshed, otherwise value as computed
+     * during last analysis.
+     * The metric must be declared in the formula dependencies
+     * (see {@link IssueMetricFormula#getDependentMetrics()}).
      */
     OptionalDouble getValue(Metric metric);
 

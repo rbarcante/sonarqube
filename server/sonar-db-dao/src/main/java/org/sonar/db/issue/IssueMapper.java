@@ -49,7 +49,7 @@ public interface IssueMapper {
     @Param("likeModuleUuidPath") String likeModuleUuidPath,
     ResultHandler<IssueDto> handler);
 
-  Collection<IssueGroupDto> selectGroupsOfComponentTreeOnLeak(
+  Collection<IssueGroupDto> selectIssueGroupsByBaseComponent(
     @Param("baseComponent") ComponentDto baseComponent,
-    @Param("createdAfter") long createdAfter);
+    @Param("leakPeriodBeginningDate") long leakPeriodBeginningDate);
 }
