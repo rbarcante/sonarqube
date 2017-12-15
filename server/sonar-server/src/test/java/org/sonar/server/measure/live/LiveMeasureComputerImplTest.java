@@ -40,6 +40,7 @@ import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 public class LiveMeasureComputerImplTest {
 
@@ -222,7 +223,8 @@ public class LiveMeasureComputerImplTest {
     IssueMetricFormulaFactory formulaFactory = new TestIssueMetricFormulaFactory(asList(formulas));
     MeasureMatrixLoader matrixLoader = new MeasureMatrixLoader(db.getDbClient());
 
-    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), matrixLoader, settings.asConfig(), formulaFactory);
+    LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class);
+    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), matrixLoader, settings.asConfig(), formulaFactory, qGateComputer);
     underTest.refresh(db.getSession(), components);
   }
 

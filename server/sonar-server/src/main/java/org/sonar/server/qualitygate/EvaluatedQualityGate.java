@@ -37,11 +37,13 @@ public class EvaluatedQualityGate {
   private final QualityGate qualityGate;
   private final Status status;
   private final Set<EvaluatedCondition> evaluatedConditions;
+  private final boolean ignoredConditionsOnSmallChangeset;
 
-  private EvaluatedQualityGate(QualityGate qualityGate, Status status, Set<EvaluatedCondition> evaluatedConditions) {
+  private EvaluatedQualityGate(QualityGate qualityGate, Status status, Set<EvaluatedCondition> evaluatedConditions, boolean ignoredConditionsOnSmallChangeset) {
     this.qualityGate = qualityGate;
     this.status = status;
     this.evaluatedConditions = evaluatedConditions;
+    this.ignoredConditionsOnSmallChangeset = ignoredConditionsOnSmallChangeset;
   }
 
   public QualityGate getQualityGate() {
@@ -54,6 +56,10 @@ public class EvaluatedQualityGate {
 
   public Set<EvaluatedCondition> getEvaluatedConditions() {
     return evaluatedConditions;
+  }
+
+  public boolean hasIgnoredConditionsOnSmallChangeset() {
+    return ignoredConditionsOnSmallChangeset;
   }
 
   public static Builder newBuilder() {
@@ -92,6 +98,7 @@ public class EvaluatedQualityGate {
     private QualityGate qualityGate;
     private Status status;
     private final Map<Condition, EvaluatedCondition> evaluatedConditions = new HashMap<>();
+    private boolean ignoredConditionsOnSmallChangeset = false;
 
     private Builder() {
       // use static factory method
@@ -107,8 +114,18 @@ public class EvaluatedQualityGate {
       return this;
     }
 
+    public Builder setIgnoredConditionsOnSmallChangeset(boolean b) {
+      this.ignoredConditionsOnSmallChangeset = b;
+      return this;
+    }
+
     public Builder addCondition(Condition condition, EvaluationStatus status, @Nullable String value) {
       evaluatedConditions.put(condition, new EvaluatedCondition(condition, status, value));
+      return this;
+    }
+
+    public Builder addCondition(EvaluatedCondition c) {
+      evaluatedConditions.put(c.getCondition(), c);
       return this;
     }
 
@@ -123,7 +140,8 @@ public class EvaluatedQualityGate {
       return new EvaluatedQualityGate(
         this.qualityGate,
         this.status,
-        checkEvaluatedConditions(qualityGate, evaluatedConditions));
+        checkEvaluatedConditions(qualityGate, evaluatedConditions),
+        ignoredConditionsOnSmallChangeset);
     }
 
     private static Set<EvaluatedCondition> checkEvaluatedConditions(QualityGate qualityGate, Map<Condition, EvaluatedCondition> evaluatedConditions) {
@@ -155,5 +173,7 @@ public class EvaluatedQualityGate {
     OK,
     WARN,
     ERROR
+
+
   }
 }

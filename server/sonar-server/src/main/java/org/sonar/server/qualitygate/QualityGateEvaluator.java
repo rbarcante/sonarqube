@@ -19,16 +19,31 @@
  */
 package org.sonar.server.qualitygate;
 
-import org.junit.Test;
-import org.sonar.core.platform.ComponentContainer;
+import java.util.Optional;
+import java.util.OptionalDouble;
+import org.sonar.api.ce.ComputeEngineSide;
+import org.sonar.api.measures.Metric;
+import org.sonar.api.server.ServerSide;
 
-import static org.assertj.core.api.Assertions.assertThat;
+@ComputeEngineSide
+@ServerSide
+public interface QualityGateEvaluator {
 
-public class QualityGateModuleTest {
-  @Test
-  public void verify_count_of_added_components() {
-    ComponentContainer container = new ComponentContainer();
-    new QualityGateModule().configure(container);
-    assertThat(container.size()).isEqualTo(21 + 2);
+  EvaluatedQualityGate evaluate(QualityGate gate, Measures measures);
+
+  interface Measures {
+    Optional<Measure> get(String metricKey);
+  }
+
+  interface Measure {
+    Metric.ValueType getType();
+
+    // TODO replace by Optional<Double>
+    OptionalDouble getValue();
+
+    Optional<String> getStringValue();
+
+    // TODO replace by Optional<Double>
+    OptionalDouble getLeakValue();
   }
 }

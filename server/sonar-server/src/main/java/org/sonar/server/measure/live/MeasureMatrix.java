@@ -73,6 +73,10 @@ class MeasureMatrix {
     return bottomUpComponents.stream();
   }
 
+  ComponentDto getProject() {
+    return bottomUpComponents.get(bottomUpComponents.size()-1);
+  }
+
   OptionalDouble getValue(ComponentDto component, Metric metric) {
     checkArgument(table.containsColumn(metric.getKey()));
     MeasureCell cell = table.get(component.uuid(), metric.getKey());

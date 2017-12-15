@@ -21,6 +21,7 @@ package org.sonar.server.qualitygate;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -118,6 +119,13 @@ public class Condition {
 
     public String getDbValue() {
       return dbValue;
+    }
+
+    public static Operator fromDbValue(String s) {
+      return Stream.of(values())
+        .filter(o -> o.getDbValue().equals(s))
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException("Unsupported operator db value: " + s));
     }
   }
 }

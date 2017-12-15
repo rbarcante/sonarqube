@@ -40,12 +40,15 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
   private final MeasureMatrixLoader matrixLoader;
   private final Configuration config;
   private final IssueMetricFormulaFactory formulaFactory;
+  private final LiveQualityGateComputer qGateComputer;
 
-  public LiveMeasureComputerImpl(DbClient dbClient, MeasureMatrixLoader matrixLoader, Configuration config, IssueMetricFormulaFactory formulaFactory) {
+  public LiveMeasureComputerImpl(DbClient dbClient, MeasureMatrixLoader matrixLoader, Configuration config,
+    IssueMetricFormulaFactory formulaFactory, LiveQualityGateComputer qGateComputer) {
     this.dbClient = dbClient;
     this.matrixLoader = matrixLoader;
     this.config = config;
     this.formulaFactory = formulaFactory;
+    this.qGateComputer = qGateComputer;
   }
 
   @Override
@@ -91,6 +94,8 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     // persist the measures that have been created or updated
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
     dbSession.commit();
+
+    qGateComputer.refreshGateStatus(dbSession, matrix.getProject());
   }
 
   private static class FormulaContextImpl implements IssueMetricFormula.Context {
