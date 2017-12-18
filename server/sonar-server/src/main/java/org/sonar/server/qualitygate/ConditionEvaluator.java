@@ -37,12 +37,12 @@ class ConditionEvaluator {
   static EvaluatedCondition evaluate(Condition condition, QualityGateEvaluator.Measures measures) {
     Optional<QualityGateEvaluator.Measure> measure = measures.get(condition.getMetricKey());
     if (!measure.isPresent()) {
-      return new EvaluatedCondition(condition, EvaluationStatus.NO_VALUE, null);
+      return new EvaluatedCondition(condition, EvaluationStatus.OK, null);
     }
 
     Optional<Comparable> value = getMeasureValue(condition, measure.get());
     if (!value.isPresent()) {
-      return new EvaluatedCondition(condition, EvaluationStatus.NO_VALUE, null);
+      return new EvaluatedCondition(condition, EvaluationStatus.OK, null);
     }
 
     Metric.ValueType type = measure.get().getType();
@@ -60,7 +60,7 @@ class ConditionEvaluator {
       return Optional.empty();
     }
 
-    if (!isOk(value, threshold.get(), condition)) {
+    if (reachThreshold(value, threshold.get(), condition)) {
       EvaluationStatus status = error ? EvaluationStatus.ERROR : EvaluationStatus.WARN;
       return of(new EvaluatedCondition(condition, status, value.toString()));
     }
@@ -164,7 +164,7 @@ class ConditionEvaluator {
     return value.contains(".") ? Integer.parseInt(value.substring(0, value.indexOf('.'))) : Integer.parseInt(value);
   }
 
-  private static boolean isOk(Comparable measureValue, Comparable threshold, Condition condition) {
+  private static boolean reachThreshold(Comparable measureValue, Comparable threshold, Condition condition) {
     int comparison = measureValue.compareTo(threshold);
     switch (condition.getOperator()) {
       case EQUALS:
@@ -172,9 +172,9 @@ class ConditionEvaluator {
       case NOT_EQUALS:
         return comparison != 0;
       case GREATER_THAN:
-        return comparison >= 0;
+        return comparison > 0;
       case LESS_THAN:
-        return comparison <= 0;
+        return comparison < 0;
       default:
         throw new IllegalArgumentException(String.format("Unsupported operator '%s'", condition.getOperator()));
     }

@@ -30,6 +30,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.issue.Issue;
+import org.sonar.api.measures.Metric.Level;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.stream.MoreCollectors;
@@ -83,7 +84,7 @@ public class LiveQualityGateFactoryImplTest {
 
     EvaluatedQualityGate qualityGate = underTest.buildForShortLivedBranch(project);
 
-    assertThat(qualityGate.getStatus()).isEqualTo(EvaluatedQualityGate.Status.OK);
+    assertThat(qualityGate.getStatus()).isEqualTo(Level.OK);
     assertThat(qualityGate.getEvaluatedConditions())
       .extracting(EvaluatedCondition::getStatus, EvaluatedCondition::getValue)
       .containsOnly(tuple(EvaluatedCondition.EvaluationStatus.OK, Optional.of("0")));
@@ -135,7 +136,7 @@ public class LiveQualityGateFactoryImplTest {
 
     EvaluatedQualityGate qualityGate = underTest.buildForShortLivedBranch(project);
 
-    assertThat(qualityGate.getStatus()).isEqualTo(EvaluatedQualityGate.Status.ERROR);
+    assertThat(qualityGate.getStatus()).isEqualTo(Level.ERROR);
     assertThat(qualityGate.getEvaluatedConditions())
       .extracting(s -> s.getCondition().getMetricKey(), EvaluatedCondition::getStatus, EvaluatedCondition::getValue)
       .containsOnly(expectedQGConditions);
@@ -155,7 +156,7 @@ public class LiveQualityGateFactoryImplTest {
 
     EvaluatedQualityGate qualityGate = underTest.buildForShortLivedBranch(project);
 
-    assertThat(qualityGate.getStatus()).isEqualTo(EvaluatedQualityGate.Status.ERROR);
+    assertThat(qualityGate.getStatus()).isEqualTo(Level.ERROR);
     assertThat(qualityGate.getEvaluatedConditions())
       .extracting(s -> s.getCondition().getMetricKey(), EvaluatedCondition::getStatus, EvaluatedCondition::getValue)
       .containsOnly(

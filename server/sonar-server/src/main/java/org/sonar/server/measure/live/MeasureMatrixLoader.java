@@ -19,14 +19,12 @@
  */
 package org.sonar.server.measure.live;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.sonar.api.measures.Metric;
 import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.server.ServerSide;
 import org.sonar.core.util.stream.MoreCollectors;
@@ -35,6 +33,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
+import org.sonar.db.organization.OrganizationDto;
 
 @ServerSide
 public class MeasureMatrixLoader {
@@ -45,10 +44,9 @@ public class MeasureMatrixLoader {
     this.dbClient = dbClient;
   }
 
-  public MeasureMatrix load(DbSession dbSession, Collection<ComponentDto> componentsInSameProject, Collection<Metric> metrics) {
-    List<String> metricKeys = metrics.stream().map(Metric::getKey).collect(MoreCollectors.toArrayList());
-    List<MetricDto> metricDtos = dbClient.metricDao().selectByKeys(dbSession, metricKeys);
-    Map<Integer, MetricDto> metricsPerId = metricDtos
+  public MeasureMatrix load(DbSession dbSession, Collection<ComponentDto> componentsInSameProject, Collection<String> metricKeys) {
+    List<MetricDto> metrics = dbClient.metricDao().selectByKeys(dbSession, metricKeys);
+    Map<Integer, MetricDto> metricsPerId = metrics
       .stream()
       .collect(MoreCollectors.uniqueIndex(MetricDto::getId));
 
@@ -58,14 +56,24 @@ public class MeasureMatrixLoader {
       // ancestors, excluding self
       componentUuids.addAll(component.getUuidPathAsList());
     }
-    List<ComponentDto> bottomUpComponents = Ordering
+    List<ComponentDto> bottomUpComponents = loadAndOrderComponents(dbSession, componentUuids);
+    ComponentDto project = bottomUpComponents.get(bottomUpComponents.size() - 1);
+    OrganizationDto organization = loadOrganization(dbSession, project);
+
+    List<LiveMeasureDto> dbMeasures = dbClient.liveMeasureDao().selectByComponentUuidsAndMetricIds(dbSession, componentUuids, metricsPerId.keySet());
+    return new MeasureMatrix(organization, bottomUpComponents, metrics, dbMeasures);
+  }
+
+  private OrganizationDto loadOrganization(DbSession dbSession, ComponentDto project) {
+    String organizationUuid = project.getOrganizationUuid();
+    return dbClient.organizationDao().selectByUuid(dbSession, organizationUuid)
+      .orElseThrow(() -> new IllegalStateException("No organization with UUID " + organizationUuid));
+  }
+
+  private List<ComponentDto> loadAndOrderComponents(DbSession dbSession, Set<String> componentUuids) {
+    return Ordering
       .explicit(Qualifiers.ORDERED_BOTTOM_UP)
       .onResultOf(ComponentDto::qualifier)
       .sortedCopy(dbClient.componentDao().selectByUuids(dbSession, componentUuids));
-
-    List<LiveMeasureDto> dbMeasures = dbClient.liveMeasureDao().selectByComponentUuidsAndMetricIds(dbSession,
-      Lists.transform(bottomUpComponents, ComponentDto::uuid),
-      metricsPerId.keySet());
-    return new MeasureMatrix(bottomUpComponents, metricDtos, dbMeasures);
   }
 }

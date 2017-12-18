@@ -24,15 +24,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.sonar.api.config.Configuration;
+import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
+import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.DebtRatingGrid;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
+import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 
 public class LiveMeasureComputerImpl implements LiveMeasureComputer {
 
@@ -72,7 +77,8 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     }
     Optional<Long> beginningOfLeakPeriod = lastAnalysis.map(SnapshotDto::getPeriodDate);
 
-    MeasureMatrix matrix = matrixLoader.load(dbSession, components, formulaFactory.getFormulaMetrics());
+    Collection<String> metricKeys = getKeysOfAllInvolvedMetrics();
+    MeasureMatrix matrix = matrixLoader.load(dbSession, components, metricKeys);
     DebtRatingGrid debtRatingGrid = new DebtRatingGrid(config);
 
     matrix.getBottomUpComponents().forEach(c -> {
@@ -91,11 +97,22 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
       }
     });
 
+
+    qGateComputer.refreshGateStatus(dbSession, matrix);
+
     // persist the measures that have been created or updated
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
     dbSession.commit();
 
-    qGateComputer.refreshGateStatus(dbSession, matrix.getProject());
+  }
+
+  private Collection<String> getKeysOfAllInvolvedMetrics() {
+    Set<Metric> metrics = formulaFactory.getFormulaMetrics();
+
+    // TODO add gate thresholds + minimumxxx
+    return Stream.concat(metrics.stream(), Stream.of(CoreMetrics.ALERT_STATUS, CoreMetrics.QUALITY_GATE_DETAILS))
+      .map(Metric::getKey)
+      .collect(MoreCollectors.toHashSet(metrics.size()));
   }
 
   private static class FormulaContextImpl implements IssueMetricFormula.Context {
@@ -126,7 +143,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
 
     @Override
     public OptionalDouble getValue(Metric metric) {
-      return matrix.getValue(currentComponent, metric);
+      return matrix.getValue(currentComponent, metric.getKey());
     }
 
     @Override

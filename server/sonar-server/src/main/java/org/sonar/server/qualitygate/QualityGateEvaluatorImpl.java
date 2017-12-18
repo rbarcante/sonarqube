@@ -23,6 +23,7 @@ import com.google.common.collect.Multimap;
 import java.util.Collection;
 import java.util.Set;
 import java.util.function.Function;
+import org.sonar.api.measures.Metric.Level;
 import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus;
 
@@ -71,15 +72,15 @@ public class QualityGateEvaluatorImpl implements QualityGateEvaluator {
     return leakEvaluation;
   }
 
-  private static EvaluatedQualityGate.Status overallStatusOf(Set<EvaluatedCondition> conditions) {
+  private static Level overallStatusOf(Set<EvaluatedCondition> conditions) {
     Set<EvaluationStatus> statuses = conditions.stream().map(EvaluatedCondition::getStatus).collect(toEnumSet(EvaluationStatus.class));
     if (statuses.contains(EvaluationStatus.ERROR)) {
-      return EvaluatedQualityGate.Status.ERROR;
+      return Level.ERROR;
     }
     if (statuses.contains(EvaluationStatus.WARN)) {
-      return EvaluatedQualityGate.Status.WARN;
+      return Level.WARN;
     }
-    return EvaluatedQualityGate.Status.OK;
+    return Level.OK;
   }
 
 }

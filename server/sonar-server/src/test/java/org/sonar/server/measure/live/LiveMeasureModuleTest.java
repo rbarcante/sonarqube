@@ -30,7 +30,7 @@ public class LiveMeasureModuleTest {
   public void verify_count_of_added_components() {
     ComponentContainer container = new ComponentContainer();
     new LiveMeasureModule().configure(container);
-    assertThat(container.size()).isEqualTo(3 + 2);
+    assertThat(container.size()).isEqualTo(4 + 2);
   }
 
 

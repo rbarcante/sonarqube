@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -34,6 +35,7 @@ import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
+import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -50,12 +52,15 @@ class MeasureMatrix {
   // component uuid -> metric key -> measure
   private final Table<String, String, MeasureCell> table;
 
+  private final OrganizationDto organization;
+
   // direction is from file to project
   private final List<ComponentDto> bottomUpComponents;
 
   private final Map<String, MetricDto> metricsByKeys;
 
-  MeasureMatrix(List<ComponentDto> bottomUpComponents, Collection<MetricDto> metrics, List<LiveMeasureDto> dbMeasures) {
+  MeasureMatrix(OrganizationDto organization, List<ComponentDto> bottomUpComponents, Collection<MetricDto> metrics, List<LiveMeasureDto> dbMeasures) {
+    this.organization = organization;
     this.bottomUpComponents = bottomUpComponents;
     this.metricsByKeys = metrics
       .stream()
@@ -73,13 +78,22 @@ class MeasureMatrix {
     return bottomUpComponents.stream();
   }
 
+  OrganizationDto getOrganization() {
+    return organization;
+  }
+
   ComponentDto getProject() {
     return bottomUpComponents.get(bottomUpComponents.size()-1);
   }
 
-  OptionalDouble getValue(ComponentDto component, Metric metric) {
-    checkArgument(table.containsColumn(metric.getKey()));
-    MeasureCell cell = table.get(component.uuid(), metric.getKey());
+  Optional<LiveMeasureDto> getMeasure(ComponentDto component, String metricKey) {
+    MeasureCell cell = table.get(component.uuid(), metricKey);
+    return cell == null ? Optional.empty() : Optional.of(cell.measure);
+  }
+
+  OptionalDouble getValue(ComponentDto component, String metricKey) {
+    checkArgument(table.containsColumn(metricKey));
+    MeasureCell cell = table.get(component.uuid(), metricKey);
     if (cell == null || cell.getMeasure().getValue() == null) {
       return OptionalDouble.empty();
     }
@@ -116,6 +130,14 @@ class MeasureMatrix {
         double leakInitialValue = initialValue - initialVariation;
         m.setVariation(value.getIndex() - leakInitialValue);
       }
+      return true;
+    });
+  }
+
+  void setValue(ComponentDto component, Metric metric, String data) {
+    changeCell(component, metric, m -> {
+      // FIXME
+      m.setData(data);
       return true;
     });
   }

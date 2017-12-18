@@ -201,6 +201,8 @@ public class BulkChangeAction implements IssuesWsAction {
     refreshLiveMeasures(dbSession, data, result);
 
     items.forEach(sendNotification(issueChangeContext, data));
+
+
     buildWebhookIssueChange(data.propertiesByActions)
       .ifPresent(issueChange -> issueChangeTrigger.onChange(
         new IssueChangeTrigger.IssueChangeData(

@@ -34,73 +34,73 @@ public class ConditionEvaluatorTest {
   public ExpectedException expectedException = ExpectedException.none();
 
   @Test
-  public void test_EQUALS_double() {
-    test(new FakeMeasure(10.1d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.1");
-    test(new FakeMeasure(10.2d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.2");
-    test(new FakeMeasure(10.3d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.3");
+  public void EQUALS_double() {
+    test(new FakeMeasure(10.1d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.1");
+    test(new FakeMeasure(10.2d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.2");
+    test(new FakeMeasure(10.3d), Condition.Operator.EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.3");
   }
 
   @Test
-  public void test_NOT_EQUALS_double() {
-    test(new FakeMeasure(10.1d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.1");
-    test(new FakeMeasure(10.2d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.2");
-    test(new FakeMeasure(10.3d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.3");
+  public void NOT_EQUALS_double() {
+    test(new FakeMeasure(10.1d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.1");
+    test(new FakeMeasure(10.2d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.2");
+    test(new FakeMeasure(10.3d), Condition.Operator.NOT_EQUALS, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.3");
   }
 
   @Test
-  public void test_GREATER_THAN_double() {
-    test(new FakeMeasure(10.1d), Condition.Operator.GREATER_THAN, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.1");
+  public void GREATER_THAN_double() {
+    test(new FakeMeasure(10.1d), Condition.Operator.GREATER_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.1");
     test(new FakeMeasure(10.2d), Condition.Operator.GREATER_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.2");
-    test(new FakeMeasure(10.3d), Condition.Operator.GREATER_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.3");
+    test(new FakeMeasure(10.3d), Condition.Operator.GREATER_THAN, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.3");
   }
 
   @Test
-  public void test_LESS_THAN_double() {
-    test(new FakeMeasure(10.1d), Condition.Operator.LESS_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.1");
+  public void LESS_THAN_double() {
+    test(new FakeMeasure(10.1d), Condition.Operator.LESS_THAN, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.1");
     test(new FakeMeasure(10.2d), Condition.Operator.LESS_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.2");
-    test(new FakeMeasure(10.3d), Condition.Operator.LESS_THAN, "10.2", EvaluatedCondition.EvaluationStatus.ERROR, "10.3");
+    test(new FakeMeasure(10.3d), Condition.Operator.LESS_THAN, "10.2", EvaluatedCondition.EvaluationStatus.OK, "10.3");
   }
 
   @Test
-  public void test_EQUALS_int() {
-    test(new FakeMeasure(10), Condition.Operator.EQUALS, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
-    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(10), Condition.Operator.EQUALS, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+  public void EQUALS_int() {
+    test(new FakeMeasure(10), Condition.Operator.EQUALS, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.EQUALS, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
 
     // badly stored thresholds are truncated
-    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10.4", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(11), Condition.Operator.EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.ERROR, "11");
+    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10.4", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(11), Condition.Operator.EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.OK, "11");
   }
 
   @Test
-  public void test_NOT_EQUALS_int() {
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10", EvaluatedCondition.EvaluationStatus.ERROR, "10");
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
+  public void NOT_EQUALS_int() {
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
 
     // badly stored thresholds are truncated
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10.4", EvaluatedCondition.EvaluationStatus.ERROR, "10");
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
-    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "9.9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10.4", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "10.9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.NOT_EQUALS, "9.9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
   }
 
   @Test
-  public void test_GREATER_THAN_int() {
-    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+  public void GREATER_THAN_int() {
+    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
     test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
   }
 
   @Test
-  public void test_LESS_THAN_int() {
-    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+  public void LESS_THAN_int() {
+    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
     test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
-    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
   }
 
-
-  private void test(QualityGateEvaluator.Measure measure, Condition.Operator operator, String errorThreshold, EvaluatedCondition.EvaluationStatus expectedStatus, @Nullable String expectedValue) {
+  private void test(QualityGateEvaluator.Measure measure, Condition.Operator operator, String errorThreshold, EvaluatedCondition.EvaluationStatus expectedStatus,
+    @Nullable String expectedValue) {
     Condition condition = new Condition("foo", operator, errorThreshold, null, false);
 
     EvaluatedCondition result = ConditionEvaluator.evaluate(condition, new FakeMeasures(measure));
@@ -316,7 +316,7 @@ public class ConditionEvaluatorTest {
   // }
   //
   // @Test
-  // public void test_condition_on_period() {
+  // public void condition_on_period() {
   // for (Metric.MetricType metricType : ImmutableList.of(FLOAT, INT, WORK_DUR)) {
   // Metric metric = createMetric(metricType);
   // Measure measure = newMeasureBuilder().setVariation(3d).createNoValue();
@@ -336,7 +336,7 @@ public class ConditionEvaluatorTest {
   // }
   //
   // @Test
-  // public void test_condition_on_rating() throws Exception {
+  // public void condition_on_rating() throws Exception {
   // Metric metric = createMetric(RATING);
   // Measure measure = newMeasureBuilder().create(4, "D");
   //
@@ -347,7 +347,7 @@ public class ConditionEvaluatorTest {
   // }
   //
   // @Test
-  // public void test_condition_on_rating_on_leak_period() throws Exception {
+  // public void condition_on_rating_on_leak_period() throws Exception {
   // Metric metric = createMetric(RATING);
   // Measure measure = newMeasureBuilder().setVariation(4d).createNoValue();
   //
@@ -358,7 +358,7 @@ public class ConditionEvaluatorTest {
   // }
   //
   // @Test
-  // public void test_condition_on_rating_on_leak_period_when_variation_is_zero() throws Exception {
+  // public void condition_on_rating_on_leak_period_when_variation_is_zero() throws Exception {
   // Metric metric = createMetric(RATING);
   // Measure measure = newMeasureBuilder().setVariation(0d).createNoValue();
   //

@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+import org.sonar.api.measures.Metric;
 import org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -35,13 +36,13 @@ import static java.util.Objects.requireNonNull;
 @Immutable
 public class EvaluatedQualityGate {
   private final QualityGate qualityGate;
-  private final Status status;
+  private final Metric.Level status;
   private final Set<EvaluatedCondition> evaluatedConditions;
   private final boolean ignoredConditionsOnSmallChangeset;
 
-  private EvaluatedQualityGate(QualityGate qualityGate, Status status, Set<EvaluatedCondition> evaluatedConditions, boolean ignoredConditionsOnSmallChangeset) {
-    this.qualityGate = qualityGate;
-    this.status = status;
+  private EvaluatedQualityGate(QualityGate qualityGate, Metric.Level status, Set<EvaluatedCondition> evaluatedConditions, boolean ignoredConditionsOnSmallChangeset) {
+    this.qualityGate = requireNonNull(qualityGate, "qualityGate can't be null");
+    this.status = requireNonNull(status, "status can't be null");
     this.evaluatedConditions = evaluatedConditions;
     this.ignoredConditionsOnSmallChangeset = ignoredConditionsOnSmallChangeset;
   }
@@ -50,7 +51,7 @@ public class EvaluatedQualityGate {
     return qualityGate;
   }
 
-  public Status getStatus() {
+  public Metric.Level getStatus() {
     return status;
   }
 
@@ -96,7 +97,7 @@ public class EvaluatedQualityGate {
 
   public static final class Builder {
     private QualityGate qualityGate;
-    private Status status;
+    private Metric.Level status;
     private final Map<Condition, EvaluatedCondition> evaluatedConditions = new HashMap<>();
     private boolean ignoredConditionsOnSmallChangeset = false;
 
@@ -105,12 +106,12 @@ public class EvaluatedQualityGate {
     }
 
     public Builder setQualityGate(QualityGate qualityGate) {
-      this.qualityGate = checkQualityGate(qualityGate);
+      this.qualityGate = qualityGate;
       return this;
     }
 
-    public Builder setStatus(Status status) {
-      this.status = checkStatus(status);
+    public Builder setStatus(Metric.Level status) {
+      this.status = status;
       return this;
     }
 
@@ -134,9 +135,6 @@ public class EvaluatedQualityGate {
     }
 
     public EvaluatedQualityGate build() {
-      checkQualityGate(this.qualityGate);
-      checkStatus(this.status);
-
       return new EvaluatedQualityGate(
         this.qualityGate,
         this.status,
@@ -159,21 +157,5 @@ public class EvaluatedQualityGate {
 
       return ImmutableSet.copyOf(evaluatedConditions.values());
     }
-
-    private static QualityGate checkQualityGate(@Nullable QualityGate qualityGate) {
-      return requireNonNull(qualityGate, "qualityGate can't be null");
-    }
-
-    private static Status checkStatus(@Nullable Status status) {
-      return requireNonNull(status, "status can't be null");
-    }
-  }
-
-  public enum Status {
-    OK,
-    WARN,
-    ERROR
-
-
   }
 }

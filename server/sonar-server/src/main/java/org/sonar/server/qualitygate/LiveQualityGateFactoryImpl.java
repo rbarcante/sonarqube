@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import org.elasticsearch.action.search.SearchResponse;
 import org.sonar.api.measures.CoreMetrics;
+import org.sonar.api.measures.Metric;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.System2;
 import org.sonar.db.component.ComponentDto;
@@ -103,11 +104,11 @@ public class LiveQualityGateFactoryImpl implements LiveQualityGateFactory {
     }
   }
 
-  private static EvaluatedQualityGate.Status qgStatusFrom(Set<EvaluatedCondition> conditions) {
+  private static Metric.Level qgStatusFrom(Set<EvaluatedCondition> conditions) {
     if (conditions.stream().anyMatch(c -> c.getStatus() == EvaluatedCondition.EvaluationStatus.ERROR)) {
-      return EvaluatedQualityGate.Status.ERROR;
+      return Metric.Level.ERROR;
     }
-    return EvaluatedQualityGate.Status.OK;
+    return Metric.Level.OK;
   }
 
   private static long getMeasure(LinkedHashMap<String, Long> typeFacet, ShortLivingBranchQualityGate.Condition c) {

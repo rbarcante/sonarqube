@@ -27,6 +27,7 @@ public class LiveMeasureModule extends Module {
     add(
       IssueMetricFormulaFactoryImpl.class,
       LiveMeasureComputerImpl.class,
-      MeasureMatrixLoader.class);
+      MeasureMatrixLoader.class,
+      LiveQualityGateComputer.class);
   }
 }

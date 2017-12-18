@@ -19,15 +19,28 @@
  */
 package org.sonar.server.measure.live;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
+import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.server.ServerSide;
+import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
+import org.sonar.db.qualitygate.QualityGateConditionDto;
+import org.sonar.db.qualitygate.QualityGateDto;
+import org.sonar.server.qualitygate.Condition;
+import org.sonar.server.qualitygate.EvaluatedQualityGate;
+import org.sonar.server.qualitygate.QualityGate;
+import org.sonar.server.qualitygate.QualityGateConverter;
 import org.sonar.server.qualitygate.QualityGateEvaluator;
 import org.sonar.server.qualitygate.QualityGateFinder;
 
@@ -44,40 +57,40 @@ public class LiveQualityGateComputer {
     this.evaluator = evaluator;
   }
 
-  public void refreshGateStatus(DbSession dbSession, ComponentDto project) {
-//    QualityGateDto gateDto = qGateFinder.getQualityGate(dbSession, project.getId()).get().getQualityGate();
-//    Collection<QualityGateConditionDto> conditionDtos = dbClient.gateConditionDao().selectForQualityGate(dbSession, gateDto.getId());
-//    Set<Integer> metricIds = conditionDtos.stream().map(c -> (int) c.getMetricId())
-//      .collect(MoreCollectors.toHashSet(conditionDtos.size()));
-//    List<MetricDto> metrics = dbClient.metricDao().selectByIds(dbSession, metricIds);
-//    Map<Integer, MetricDto> metricsById = metrics.stream().collect(MoreCollectors.uniqueIndex(MetricDto::getId));
-//
-//    Set<Condition> conditions = conditionDtos.stream().map(conditionDto -> {
-//      String metricKey = metricsById.get((int) conditionDto.getMetricId()).getKey();
-//      Condition.Operator operator = Condition.Operator.fromDbValue(conditionDto.getOperator());
-//      boolean onLeak = Objects.equals(conditionDto.getPeriod(), 1);
-//      return new Condition(metricKey, operator, conditionDto.getErrorThreshold(), conditionDto.getWarningThreshold(), onLeak);
-//    }).collect(MoreCollectors.toHashSet(conditionDtos.size()));
-//
-//    QualityGate gate = new QualityGate(String.valueOf(gateDto.getId()), gateDto.getName(), conditions);
-//
-//    Map<String, LiveMeasureDto> liveMeasuresByMetric = dbClient.liveMeasureDao()
-//      .selectByComponentUuidsAndMetricIds(dbSession, Collections.singletonList(project.uuid()), metricIds)
-//      .stream()
-//      .collect(MoreCollectors.uniqueIndex(lm -> metricsById.get(lm.getMetricId()).getKey()));
-//
-//    QualityGateEvaluator.Measures measures = metricKey -> {
-//      LiveMeasureDto liveMeasureDto = liveMeasuresByMetric.get(metricKey);
-//      if (liveMeasureDto == null) {
-//        return Optional.empty();
-//      }
-//      MetricDto metric = metricsById.get(liveMeasureDto.getMetricId());
-//      return Optional.of(new LiveMeasure(liveMeasureDto, metric));
-//    };
-//
-//
-//    EvaluatedQualityGate evaluatedGate = evaluator.evaluate(gate, measures);
+  EvaluatedQualityGate refreshGateStatus(DbSession dbSession, MeasureMatrix measureMatrix) {
+    ComponentDto project = measureMatrix.getProject();
+    QualityGateDto gateDto = qGateFinder.getQualityGate(dbSession, measureMatrix.getOrganization(), project).getQualityGate();
+    Collection<QualityGateConditionDto> conditionDtos = dbClient.gateConditionDao().selectForQualityGate(dbSession, gateDto.getId());
+    Set<Integer> metricIds = conditionDtos.stream().map(c -> (int) c.getMetricId())
+      .collect(MoreCollectors.toHashSet(conditionDtos.size()));
+    List<MetricDto> metrics = dbClient.metricDao().selectByIds(dbSession, metricIds);
+    Map<Integer, MetricDto> metricsById = metrics.stream().collect(MoreCollectors.uniqueIndex(MetricDto::getId));
 
+    Set<Condition> conditions = conditionDtos.stream().map(conditionDto -> {
+      String metricKey = metricsById.get((int) conditionDto.getMetricId()).getKey();
+      Condition.Operator operator = Condition.Operator.fromDbValue(conditionDto.getOperator());
+      boolean onLeak = Objects.equals(conditionDto.getPeriod(), 1);
+      return new Condition(metricKey, operator, conditionDto.getErrorThreshold(), conditionDto.getWarningThreshold(), onLeak);
+    }).collect(MoreCollectors.toHashSet(conditionDtos.size()));
+
+    QualityGate gate = new QualityGate(String.valueOf(gateDto.getId()), gateDto.getName(), conditions);
+
+    QualityGateEvaluator.Measures measures = metricKey -> {
+      Optional<LiveMeasureDto> liveMeasureDto = measureMatrix.getMeasure(project, metricKey);
+      if (!liveMeasureDto.isPresent()) {
+        return Optional.empty();
+      }
+      MetricDto metric = metricsById.get(liveMeasureDto.get().getMetricId());
+      return Optional.of(new LiveMeasure(liveMeasureDto.get(), metric));
+    };
+
+
+    EvaluatedQualityGate evaluatedGate = evaluator.evaluate(gate, measures);
+
+    measureMatrix.setValue(project, CoreMetrics.ALERT_STATUS, evaluatedGate.getStatus().name());
+    measureMatrix.setValue(project, CoreMetrics.QUALITY_GATE_DETAILS, QualityGateConverter.toJson(evaluatedGate));
+
+    return evaluatedGate;
   }
 
   private static class LiveMeasure implements QualityGateEvaluator.Measure {
