@@ -21,17 +21,19 @@ package org.sonar.server.measure.live;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 
 /**
  * Refresh and persist the measures of some files, directories, modules
  * or projects.
  *
  * Touching a file updates the related directory, module and project.
- * Status of Quality gate is refreshed and webhooks are triggered,
- * if enabled.
+ * Status of Quality gate is refreshed but webhooks are not triggered.
  */
 @ServerSide
 public interface LiveMeasureComputer {
@@ -42,10 +44,14 @@ public interface LiveMeasureComputer {
    * different organizations.
    * Short-living and long-living branches are accepted.
    */
-  void refresh(DbSession dbSession, Collection<ComponentDto> components);
+  List<QGChangeEvent> refresh(DbSession dbSession, Collection<ComponentDto> components);
 
-  default void refresh(DbSession dbSession, ComponentDto component) {
-    refresh(dbSession, Collections.singleton(component));
+  default Optional<QGChangeEvent> refresh(DbSession dbSession, ComponentDto component) {
+    List<QGChangeEvent> events = refresh(dbSession, Collections.singleton(component));
+    if (events.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(events.get(0));
   }
 
 }

@@ -20,8 +20,8 @@
 package org.sonar.server.measure.live;
 
 import com.google.common.collect.Ordering;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,13 +44,12 @@ import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 import org.sonar.server.qualitygate.EvaluatedQualityGate;
 import org.sonar.server.qualitygate.QualityGate;
 import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
-import org.sonar.server.qualitygate.changeevent.QGChangeEventListeners;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 
+import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.groupingBy;
 import static org.sonar.core.util.stream.MoreCollectors.toArrayList;
 import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
-import static org.sonar.server.qualitygate.changeevent.Trigger.ISSUE_CHANGE;
 
 public class LiveMeasureComputerImpl implements LiveMeasureComputer {
 
@@ -58,31 +57,31 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
   private final IssueMetricFormulaFactory formulaFactory;
   private final LiveQualityGateComputer qGateComputer;
   private final ProjectConfigurationLoader projectConfigurationLoader;
-  private final QGChangeEventListeners eventListeners;
 
   public LiveMeasureComputerImpl(DbClient dbClient, IssueMetricFormulaFactory formulaFactory,
-    LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader,
-    QGChangeEventListeners eventListeners) {
+    LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader) {
     this.dbClient = dbClient;
     this.formulaFactory = formulaFactory;
     this.qGateComputer = qGateComputer;
     this.projectConfigurationLoader = projectConfigurationLoader;
-    this.eventListeners = eventListeners;
   }
 
   @Override
-  public void refresh(DbSession dbSession, Collection<ComponentDto> components) {
+  public List<QGChangeEvent> refresh(DbSession dbSession, Collection<ComponentDto> components) {
     if (components.isEmpty()) {
-      return;
+      return emptyList();
     }
 
+    List<QGChangeEvent> result = new ArrayList<>();
     Map<String, List<ComponentDto>> componentsByProjectUuid = components.stream().collect(groupingBy(ComponentDto::projectUuid));
     for (List<ComponentDto> groupedComponents : componentsByProjectUuid.values()) {
-      refreshComponentsOnSameProject(dbSession, groupedComponents);
+      Optional<QGChangeEvent> qgChangeEvent = refreshComponentsOnSameProject(dbSession, groupedComponents);
+      qgChangeEvent.ifPresent(result::add);
     }
+    return result;
   }
 
-  private void refreshComponentsOnSameProject(DbSession dbSession, List<ComponentDto> touchedComponents) {
+  private Optional<QGChangeEvent> refreshComponentsOnSameProject(DbSession dbSession, List<ComponentDto> touchedComponents) {
     // load all the components to be refreshed, including their ancestors
     List<ComponentDto> components = loadTreeOfComponents(dbSession, touchedComponents);
     ComponentDto project = findProject(components);
@@ -91,7 +90,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
 
     Optional<SnapshotDto> lastAnalysis = dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, project.uuid());
     if (!lastAnalysis.isPresent()) {
-      return;
+      return Optional.empty();
     }
     Optional<Long> beginningOfLeakPeriod = lastAnalysis.map(SnapshotDto::getPeriodDate);
 
@@ -131,10 +130,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
     dbSession.commit();
 
-    // execute post-actions like triggering of webhooks
-    QGChangeEvent event = new QGChangeEvent(project, branch, lastAnalysis.get(),
-      config, () -> Optional.of(evaluatedQualityGate));
-    eventListeners.broadcast(ISSUE_CHANGE, Collections.singleton(event));
+    return Optional.of(new QGChangeEvent(project, branch, lastAnalysis.get(), config, () -> Optional.of(evaluatedQualityGate)));
   }
 
   private List<ComponentDto> loadTreeOfComponents(DbSession dbSession, List<ComponentDto> touchedComponents) {

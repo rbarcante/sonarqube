@@ -37,13 +37,11 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
-import org.sonar.server.qualitygate.changeevent.QGChangeEventListeners;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 import org.sonar.server.settings.TestProjectConfigurationLoader;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 
 public class LiveMeasureComputerImplTest {
@@ -129,7 +127,7 @@ public class LiveMeasureComputerImplTest {
     // value is:
     // B on last analysis
     // D on beginning of leak period --> variation is -2
-    db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double)Rating.B.getIndex()).setData("B").setVariation(-2.0));
+    db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double) Rating.B.getIndex()).setData("B").setVariation(-2.0));
 
     // new value is C, so variation on leak period is D to C = -1
     run(file1, newRatingConstantFormula(Rating.C));
@@ -144,7 +142,7 @@ public class LiveMeasureComputerImplTest {
     // value is:
     // B on last analysis
     // D on beginning of leak period --> variation is -2
-    db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double)Rating.B.getIndex()).setData("B").setVariation(-2.0));
+    db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double) Rating.B.getIndex()).setData("B").setVariation(-2.0));
 
     // new value is still B, so variation on leak period is still -2
     run(file1, newRatingConstantFormula(Rating.B));
@@ -233,8 +231,7 @@ public class LiveMeasureComputerImplTest {
     LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class);
     MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
     ProjectConfigurationLoader configurationLoader = new TestProjectConfigurationLoader(settings.asConfig());
-    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer,
-      configurationLoader, mock(QGChangeEventListeners.class, RETURNS_DEEP_STUBS));
+    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader);
     underTest.refresh(db.getSession(), components);
   }
 
@@ -275,7 +272,7 @@ public class LiveMeasureComputerImplTest {
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
     AtomicInteger counter = new AtomicInteger();
     return new IssueMetricFormula(metric, false, (ctx, issues) -> {
-      ctx.setValue((double)counter.incrementAndGet());
+      ctx.setValue((double) counter.incrementAndGet());
     });
   }
 
@@ -297,7 +294,7 @@ public class LiveMeasureComputerImplTest {
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
     AtomicInteger counter = new AtomicInteger();
     return new IssueMetricFormula(metric, true, (ctx, issues) -> {
-      ctx.setValue((double)counter.incrementAndGet());
+      ctx.setValue((double) counter.incrementAndGet());
     });
   }
 
