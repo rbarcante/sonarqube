@@ -19,8 +19,18 @@
  */
 package org.sonar.server.qualitygate;
 
-import org.sonar.db.component.ComponentDto;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
-public interface LiveQualityGateFactory {
-  EvaluatedQualityGate buildForShortLivedBranch(ComponentDto componentDto);
+public class QualityGateEvaluatorImplTest {
+
+  @Rule
+  public ExpectedException expectedException = ExpectedException.none();
+
+  private QualityGateEvaluatorImpl underTest = new QualityGateEvaluatorImpl();
+
+  @Test
+  public void test_Evaluate() {
+  }
 }

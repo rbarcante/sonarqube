@@ -20,9 +20,7 @@
 package org.sonar.server.issue.ws;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -37,8 +35,6 @@ import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
-import org.sonar.core.issue.DefaultIssue;
-import org.sonar.core.issue.IssueChangeContext;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
@@ -65,7 +61,6 @@ import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
-import org.sonar.server.qualitygate.changeevent.IssueChangeTrigger;
 import org.sonar.server.rule.DefaultRuleFinder;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
@@ -80,7 +75,6 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
@@ -91,7 +85,6 @@ import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.api.rule.Severity.MAJOR;
 import static org.sonar.api.rule.Severity.MINOR;
 import static org.sonar.api.rules.RuleType.BUG;
-import static org.sonar.api.rules.RuleType.CODE_SMELL;
 import static org.sonar.api.rules.RuleType.VULNERABILITY;
 import static org.sonar.api.web.UserRole.ISSUE_ADMIN;
 import static org.sonar.api.web.UserRole.USER;
@@ -124,7 +117,6 @@ public class BulkChangeActionTest {
   private IssueStorage issueStorage = new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient,
     new IssueIndexer(es.client(), dbClient, new IssueIteratorFactory(dbClient)));
   private NotificationManager notificationManager = mock(NotificationManager.class);
-  private IssueChangeTrigger issueChangeTrigger = mock(IssueChangeTrigger.class);
   private LiveMeasureComputer liveMeasureComputer = mock(LiveMeasureComputer.class);
   private List<Action> actions = new ArrayList<>();
 
@@ -134,7 +126,7 @@ public class BulkChangeActionTest {
   private ComponentDto file;
   private UserDto user;
 
-  private WsActionTester tester = new WsActionTester(new BulkChangeAction(system2, userSession, dbClient, issueStorage, notificationManager, actions, issueChangeTrigger, liveMeasureComputer));
+  private WsActionTester tester = new WsActionTester(new BulkChangeAction(system2, userSession, dbClient, issueStorage, notificationManager, actions, liveMeasureComputer));
 
   @Before
   public void setUp() throws Exception {
@@ -149,7 +141,7 @@ public class BulkChangeActionTest {
   }
 
   @Test
-  public void set_type() throws Exception {
+  public void set_type() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
 
@@ -163,12 +155,11 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getType()).isEqualTo(RuleType.CODE_SMELL.getDbConstant());
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyIssueChangeWebhookCalled(CODE_SMELL, null, new String[] {file.uuid()}, issueDto);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void set_severity() throws Exception {
+  public void set_severity() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setSeverity(MAJOR));
 
@@ -182,12 +173,11 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getSeverity()).isEqualTo(MINOR);
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyZeroInteractions(issueChangeTrigger);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void add_tags() throws Exception {
+  public void add_tags() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setTags(asList("tag1", "tag2")));
 
@@ -201,13 +191,12 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getTags()).containsOnly("tag1", "tag2", "tag3");
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyZeroInteractions(issueChangeTrigger);
     // no need to refresh measures
     verifyMeasuresNotRefreshed();
   }
 
   @Test
-  public void remove_assignee() throws Exception {
+  public void remove_assignee() {
     setUserProjectPermissions(USER);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setAssignee("arthur"));
 
@@ -221,13 +210,12 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getAssignee()).isNull();
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyZeroInteractions(issueChangeTrigger);
     // no need to refresh measures
     verifyMeasuresNotRefreshed();
   }
 
   @Test
-  public void bulk_change_with_comment() throws Exception {
+  public void bulk_change_with_comment() {
     setUserProjectPermissions(USER);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
 
@@ -242,12 +230,11 @@ public class BulkChangeActionTest {
     assertThat(issueComment.getUserLogin()).isEqualTo("john");
     assertThat(issueComment.getChangeData()).isEqualTo("type was badly defined");
 
-    verifyIssueChangeWebhookCalled(null, "confirm", new String[] {file.uuid()}, issueDto);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void bulk_change_many_issues() throws Exception {
+  public void bulk_change_many_issues() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     UserDto userToAssign = db.users().insertUser("arthur");
     db.organizations().addMember(organization, user);
@@ -271,12 +258,11 @@ public class BulkChangeActionTest {
         tuple(issue2.getKey(), userToAssign.getLogin(), VULNERABILITY.getDbConstant(), MINOR, NOW),
         tuple(issue3.getKey(), userToAssign.getLogin(), VULNERABILITY.getDbConstant(), MINOR, NOW));
 
-    verifyIssueChangeWebhookCalled(VULNERABILITY, null, new String[] {file.uuid()}, issue1, issue2, issue3);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void send_notification() throws Exception {
+  public void send_notification() {
     setUserProjectPermissions(USER);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
 
@@ -297,12 +283,10 @@ public class BulkChangeActionTest {
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("ruleName")).isEqualTo(rule.getName());
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("changeAuthor")).isEqualTo(user.getLogin());
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("branch")).isNull();
-
-    verifyIssueChangeWebhookCalled(null, "confirm", new String[] {file.uuid()}, issueDto);
   }
 
   @Test
-  public void send_notification_on_branch() throws Exception {
+  public void send_notification_on_branch() {
     setUserProjectPermissions(USER);
 
     String branchName = "feature1";
@@ -328,12 +312,11 @@ public class BulkChangeActionTest {
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("changeAuthor")).isEqualTo(user.getLogin());
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("branch")).isEqualTo(branchName);
 
-    verifyIssueChangeWebhookCalled(null, "confirm", new String[] {fileOnBranch.uuid()}, issueDto);
     verifyMeasuresRefreshed(fileOnBranch);
   }
 
   @Test
-  public void send_notification_only_on_changed_issues() throws Exception {
+  public void send_notification_only_on_changed_issues() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     IssueDto issue1 = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
     IssueDto issue2 = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
@@ -351,12 +334,11 @@ public class BulkChangeActionTest {
     assertThat(issueChangeNotificationCaptor.getAllValues()).hasSize(1);
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("key")).isEqualTo(issue3.getKey());
 
-    verifyIssueChangeWebhookCalled(BUG, null, new String[] {file.uuid()}, issue3);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void ignore_the_issues_that_do_not_match_conditions() throws Exception {
+  public void ignore_the_issues_that_do_not_match_conditions() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     ComponentDto file2 = db.components().insertComponent(newFileDto(project));
     IssueDto issue1 = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
@@ -377,13 +359,12 @@ public class BulkChangeActionTest {
         tuple(issue3.getKey(), BUG.getDbConstant(), issue2.getUpdatedAt()),
         tuple(issue2.getKey(), BUG.getDbConstant(), issue3.getUpdatedAt()));
 
-    verifyIssueChangeWebhookCalled(VULNERABILITY, null, new String[] {file.uuid(), file2.uuid()}, issue1);
     // file2 is not refreshed
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void ignore_issues_when_there_is_nothing_to_do() throws Exception {
+  public void ignore_issues_when_there_is_nothing_to_do() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     ComponentDto file2 = db.components().insertComponent(newFileDto(project));
     IssueDto issue1 = db.issues().insertIssue(newUnresolvedIssue().setType(BUG).setSeverity(MINOR));
@@ -404,13 +385,12 @@ public class BulkChangeActionTest {
         tuple(issue2.getKey(), VULNERABILITY.getDbConstant(), issue2.getUpdatedAt()),
         tuple(issue3.getKey(), VULNERABILITY.getDbConstant(), issue3.getUpdatedAt()));
 
-    verifyIssueChangeWebhookCalled(VULNERABILITY, null, new String[] {file.uuid(), file2.uuid()}, issue1);
     // file2 is not refreshed
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void add_comment_only_on_changed_issues() throws Exception {
+  public void add_comment_only_on_changed_issues() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     IssueDto issue1 = db.issues().insertIssue(newUnresolvedIssue().setType(BUG).setSeverity(MINOR));
     // These 2 issues will be ignored as there's nothing to do
@@ -428,12 +408,11 @@ public class BulkChangeActionTest {
     assertThat(dbClient.issueChangeDao().selectByTypeAndIssueKeys(db.getSession(), singletonList(issue2.getKey()), TYPE_COMMENT)).isEmpty();
     assertThat(dbClient.issueChangeDao().selectByTypeAndIssueKeys(db.getSession(), singletonList(issue3.getKey()), TYPE_COMMENT)).isEmpty();
 
-    verifyIssueChangeWebhookCalled(VULNERABILITY, null, new String[] {file.uuid()}, issue1);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void issues_on_which_user_has_not_browse_permission_are_ignored() throws Exception {
+  public void issues_on_which_user_has_not_browse_permission_are_ignored() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     ComponentDto anotherProject = db.components().insertPrivateProject();
     ComponentDto anotherFile = db.components().insertComponent(newFileDto(anotherProject));
@@ -455,12 +434,11 @@ public class BulkChangeActionTest {
         tuple(notAuthorizedIssue1.getKey(), BUG.getDbConstant(), notAuthorizedIssue1.getUpdatedAt()),
         tuple(notAuthorizedIssue2.getKey(), BUG.getDbConstant(), notAuthorizedIssue2.getUpdatedAt()));
 
-    verifyIssueChangeWebhookCalled(VULNERABILITY, null, new String[] {file.uuid()}, authorizedIssue);
     verifyMeasuresRefreshed(file);
   }
 
   @Test
-  public void does_not_update_type_when_no_issue_admin_permission() throws Exception {
+  public void does_not_update_type_when_no_issue_admin_permission() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     ComponentDto anotherProject = db.components().insertPrivateProject();
     ComponentDto anotherFile = db.components().insertComponent(newFileDto(anotherProject));
@@ -487,7 +465,7 @@ public class BulkChangeActionTest {
   }
 
   @Test
-  public void does_not_update_severity_when_no_issue_admin_permission() throws Exception {
+  public void does_not_update_severity_when_no_issue_admin_permission() {
     setUserProjectPermissions(USER, ISSUE_ADMIN);
     ComponentDto anotherProject = db.components().insertPrivateProject();
     ComponentDto anotherFile = db.components().insertComponent(newFileDto(anotherProject));
@@ -515,7 +493,7 @@ public class BulkChangeActionTest {
   }
 
   @Test
-  public void fail_when_only_comment_action() throws Exception {
+  public void fail_when_only_comment_action() {
     setUserProjectPermissions(USER);
     IssueDto issueDto = db.issues().insertIssue(newUnresolvedIssue().setType(BUG));
 
@@ -529,7 +507,7 @@ public class BulkChangeActionTest {
   }
 
   @Test
-  public void fail_when_number_of_issues_is_more_than_500() throws Exception {
+  public void fail_when_number_of_issues_is_more_than_500() {
     userSession.logIn("john");
 
     expectedException.expectMessage("Number of issues is limited to 500");
@@ -542,36 +520,20 @@ public class BulkChangeActionTest {
   }
 
   @Test
-  public void fail_when_not_authenticated() throws Exception {
+  public void fail_when_not_authenticated() {
     expectedException.expect(UnauthorizedException.class);
 
     call(builder().setIssues(singletonList("ABCD")).build());
   }
 
   @Test
-  public void test_definition() throws Exception {
+  public void test_definition() {
     WebService.Action action = tester.getDef();
     assertThat(action.key()).isEqualTo("bulk_change");
     assertThat(action.isPost()).isTrue();
     assertThat(action.isInternal()).isFalse();
     assertThat(action.params()).hasSize(10);
     assertThat(action.responseExample()).isNotNull();
-  }
-
-  private void verifyIssueChangeWebhookCalled(@Nullable RuleType expectedRuleType, @Nullable String transitionKey,
-    String[] componentUUids, IssueDto... issueDtos) {
-    ArgumentCaptor<IssueChangeTrigger.IssueChangeData> issueChangeDataCaptor = ArgumentCaptor.forClass(IssueChangeTrigger.IssueChangeData.class);
-    verify(issueChangeTrigger).onChange(
-      issueChangeDataCaptor.capture(),
-      eq(new IssueChangeTrigger.IssueChange(expectedRuleType, transitionKey)),
-      eq(IssueChangeContext.createUser(new Date(NOW), userSession.getLogin())));
-    IssueChangeTrigger.IssueChangeData issueChangeData = issueChangeDataCaptor.getValue();
-    assertThat(issueChangeData.getIssues())
-      .extracting(DefaultIssue::key)
-      .containsOnly(Arrays.stream(issueDtos).map(IssueDto::getKey).toArray(String[]::new));
-    assertThat(issueChangeData.getComponents())
-      .extracting(ComponentDto::uuid)
-      .containsOnly(componentUUids);
   }
 
   private BulkChangeWsResponse call(BulkChangeRequest bulkChangeRequest) {
@@ -648,8 +610,8 @@ public class BulkChangeActionTest {
     actions.add(new org.sonar.server.issue.RemoveTagsAction(issueFieldsSetter));
     actions.add(new org.sonar.server.issue.CommentAction(issueFieldsSetter));
   }
-  private static class BulkChangeRequest {
 
+  private static class BulkChangeRequest {
 
     private final List<String> issues;
     private final String assign;

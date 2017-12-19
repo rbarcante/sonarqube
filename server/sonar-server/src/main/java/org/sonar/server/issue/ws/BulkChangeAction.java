@@ -55,17 +55,13 @@ import org.sonar.server.issue.AddTagsAction;
 import org.sonar.server.issue.AssignAction;
 import org.sonar.server.issue.IssueStorage;
 import org.sonar.server.issue.RemoveTagsAction;
-import org.sonar.server.issue.SetTypeAction;
-import org.sonar.server.issue.TransitionAction;
 import org.sonar.server.issue.notification.IssueChangeNotification;
 import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
-import org.sonar.server.qualitygate.changeevent.IssueChangeTrigger;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Issues;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.collect.ImmutableList.copyOf;
 import static com.google.common.collect.ImmutableMap.of;
 import static java.lang.String.format;
 import static java.util.function.Function.identity;
@@ -109,18 +105,16 @@ public class BulkChangeAction implements IssuesWsAction {
   private final IssueStorage issueStorage;
   private final NotificationManager notificationService;
   private final List<Action> actions;
-  private final IssueChangeTrigger issueChangeTrigger;
   private final LiveMeasureComputer liveMeasureComputer;
 
-  public BulkChangeAction(System2 system2, UserSession userSession, DbClient dbClient, IssueStorage issueStorage, NotificationManager notificationService, List<Action> actions,
-    IssueChangeTrigger issueChangeTrigger, LiveMeasureComputer liveMeasureComputer) {
+  public BulkChangeAction(System2 system2, UserSession userSession, DbClient dbClient, IssueStorage issueStorage, NotificationManager notificationService,
+    List<Action> actions, LiveMeasureComputer liveMeasureComputer) {
     this.system2 = system2;
     this.userSession = userSession;
     this.dbClient = dbClient;
     this.issueStorage = issueStorage;
     this.notificationService = notificationService;
     this.actions = actions;
-    this.issueChangeTrigger = issueChangeTrigger;
     this.liveMeasureComputer = liveMeasureComputer;
   }
 
@@ -198,18 +192,11 @@ public class BulkChangeAction implements IssuesWsAction {
       .filter(bulkChange(issueChangeContext, data, result))
       .collect(MoreCollectors.toList());
     issueStorage.save(items);
+
     refreshLiveMeasures(dbSession, data, result);
 
     items.forEach(sendNotification(issueChangeContext, data));
 
-
-    buildWebhookIssueChange(data.propertiesByActions)
-      .ifPresent(issueChange -> issueChangeTrigger.onChange(
-        new IssueChangeTrigger.IssueChangeData(
-          data.issues.stream().filter(result.success::contains).collect(MoreCollectors.toList()),
-          copyOf(data.componentsByUuid.values())),
-        issueChange,
-        issueChangeContext));
     return result;
   }
 
@@ -224,20 +211,6 @@ public class BulkChangeAction implements IssuesWsAction {
       .map(data.componentsByUuid::get)
       .collect(Collectors.toList());
     liveMeasureComputer.refresh(dbSession, touchedComponents);
-  }
-
-  private static Optional<IssueChangeTrigger.IssueChange> buildWebhookIssueChange(Map<String, Map<String, Object>> propertiesByActions) {
-    RuleType ruleType = Optional.ofNullable(propertiesByActions.get(SetTypeAction.SET_TYPE_KEY))
-      .map(t -> (String) t.get(SetTypeAction.TYPE_PARAMETER))
-      .map(RuleType::valueOf)
-      .orElse(null);
-    String transitionKey = Optional.ofNullable(propertiesByActions.get(TransitionAction.DO_TRANSITION_KEY))
-      .map(t -> (String) t.get(TransitionAction.TRANSITION_PARAMETER))
-      .orElse(null);
-    if (ruleType == null && transitionKey == null) {
-      return Optional.empty();
-    }
-    return Optional.of(new IssueChangeTrigger.IssueChange(ruleType, transitionKey));
   }
 
   private static Predicate<DefaultIssue> bulkChange(IssueChangeContext issueChangeContext, BulkChangeData bulkChangeData, BulkChangeResult result) {

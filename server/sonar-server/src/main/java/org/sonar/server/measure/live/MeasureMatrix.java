@@ -20,9 +20,12 @@
 package org.sonar.server.measure.live;
 
 import com.google.common.collect.ArrayTable;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.Table;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,15 +33,14 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import org.sonar.api.measures.Metric;
-import org.sonar.core.util.stream.MoreCollectors;
+import javax.annotation.Nullable;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
-import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Keep the measures in memory during refresh of live measures:
@@ -52,38 +54,26 @@ class MeasureMatrix {
   // component uuid -> metric key -> measure
   private final Table<String, String, MeasureCell> table;
 
-  private final OrganizationDto organization;
+  private final Map<String, MetricDto> metricsByKeys = new HashMap<>();
+  private final Map<Integer, MetricDto> metricsByIds = new HashMap<>();
 
-  // direction is from file to project
-  private final List<ComponentDto> bottomUpComponents;
-
-  private final Map<String, MetricDto> metricsByKeys;
-
-  MeasureMatrix(OrganizationDto organization, List<ComponentDto> bottomUpComponents, Collection<MetricDto> metrics, List<LiveMeasureDto> dbMeasures) {
-    this.organization = organization;
-    this.bottomUpComponents = bottomUpComponents;
-    this.metricsByKeys = metrics
-      .stream()
-      .collect(MoreCollectors.uniqueIndex(MetricDto::getKey));
-    this.table = ArrayTable.create(Lists.transform(bottomUpComponents, ComponentDto::uuid), metricsByKeys.keySet());
-    Map<Integer, MetricDto> metricsByIds = metricsByKeys.values()
-      .stream()
-      .collect(MoreCollectors.uniqueIndex(MetricDto::getId));
+  MeasureMatrix(Collection<ComponentDto> components, Collection<MetricDto> metrics, List<LiveMeasureDto> dbMeasures) {
+    for (MetricDto metric : metrics) {
+      this.metricsByKeys.put(metric.getKey(), metric);
+      this.metricsByIds.put(metric.getId(), metric);
+    }
+    this.table = ArrayTable.create(Collections2.transform(components, ComponentDto::uuid), metricsByKeys.keySet());
     for (LiveMeasureDto dbMeasure : dbMeasures) {
       table.put(dbMeasure.getComponentUuid(), metricsByIds.get(dbMeasure.getMetricId()).getKey(), new MeasureCell(dbMeasure, false));
     }
   }
 
-  Stream<ComponentDto> getBottomUpComponents() {
-    return bottomUpComponents.stream();
+  MetricDto getMetric(int id) {
+    return requireNonNull(metricsByIds.get(id), () -> String.format("Metric with id %d not found", id));
   }
 
-  OrganizationDto getOrganization() {
-    return organization;
-  }
-
-  ComponentDto getProject() {
-    return bottomUpComponents.get(bottomUpComponents.size()-1);
+  private MetricDto getMetric(String key) {
+    return requireNonNull(metricsByKeys.get(key), () -> String.format("Metric with key %s not found", key));
   }
 
   Optional<LiveMeasureDto> getMeasure(ComponentDto component, String metricKey) {
@@ -92,7 +82,7 @@ class MeasureMatrix {
   }
 
   OptionalDouble getValue(ComponentDto component, String metricKey) {
-    checkArgument(table.containsColumn(metricKey));
+    checkArgument(table.containsColumn(metricKey), "Metric with key %s is not registered", metricKey);
     MeasureCell cell = table.get(component.uuid(), metricKey);
     if (cell == null || cell.getMeasure().getValue() == null) {
       return OptionalDouble.empty();
@@ -100,24 +90,27 @@ class MeasureMatrix {
     return OptionalDouble.of(cell.getMeasure().getValue());
   }
 
-  void setValue(ComponentDto component, Metric metric, double value) {
-    changeCell(component, metric, m -> {
+  void setValue(ComponentDto component, String metricKey, double value) {
+    changeCell(component, metricKey, m -> {
+      MetricDto metric = getMetric(metricKey);
+      double newValue = scale(metric, value);
+
       Double initialValue = m.getValue();
-      if (initialValue != null && Double.compare(initialValue, value) == 0) {
+      if (initialValue != null && Double.compare(initialValue, newValue) == 0) {
         return false;
       }
+      m.setValue(newValue);
       Double initialVariation = m.getVariation();
       if (initialValue != null && initialVariation != null) {
         double leakInitialValue = initialValue - initialVariation;
-        m.setVariation(metric.scale(value - leakInitialValue));
+        m.setVariation(scale(metric, value - leakInitialValue));
       }
-      m.setValue(metric.scale(value));
       return true;
     });
   }
 
-  void setValue(ComponentDto component, Metric metric, Rating value) {
-    changeCell(component, metric, m -> {
+  void setValue(ComponentDto component, String metricKey, Rating value) {
+    changeCell(component, metricKey, m -> {
       Double initialValue = m.getValue();
       if (initialValue != null && Double.compare(initialValue, (double) value.getIndex()) == 0) {
         return false;
@@ -134,26 +127,29 @@ class MeasureMatrix {
     });
   }
 
-  void setValue(ComponentDto component, Metric metric, String data) {
-    changeCell(component, metric, m -> {
-      // FIXME
+  void setValue(ComponentDto component, String metricKey, @Nullable String data) {
+    changeCell(component, metricKey, m -> {
+      if (Objects.equals(m.getDataAsString(), data)) {
+        return false;
+      }
       m.setData(data);
       return true;
     });
   }
 
-  void setLeakValue(ComponentDto component, Metric metric, double variation) {
-    changeCell(component, metric, c -> {
+  void setLeakValue(ComponentDto component, String metricKey, double variation) {
+    changeCell(component, metricKey, c -> {
       if (c.getVariation() != null && Double.compare(c.getVariation(), variation) == 0) {
         return false;
       }
-      c.setVariation(metric.scale(variation));
+      MetricDto metric = metricsByKeys.get(metricKey);
+      c.setVariation(scale(metric, variation));
       return true;
     });
   }
 
-  void setLeakValue(ComponentDto component, Metric metric, Rating variation) {
-    setLeakValue(component, metric, (double) variation.getIndex());
+  void setLeakValue(ComponentDto component, String metricKey, Rating variation) {
+    setLeakValue(component, metricKey, (double) variation.getIndex());
   }
 
   Stream<LiveMeasureDto> getChanged() {
@@ -164,19 +160,33 @@ class MeasureMatrix {
       .map(MeasureCell::getMeasure);
   }
 
-  private void changeCell(ComponentDto component, Metric metric, Function<LiveMeasureDto, Boolean> changer) {
-    MeasureCell cell = table.get(component.uuid(), metric.getKey());
+  private void changeCell(ComponentDto component, String metricKey, Function<LiveMeasureDto, Boolean> changer) {
+    MeasureCell cell = table.get(component.uuid(), metricKey);
     if (cell == null) {
       LiveMeasureDto measure = new LiveMeasureDto()
         .setComponentUuid(component.uuid())
         .setProjectUuid(component.projectUuid())
-        .setMetricId(metricsByKeys.get(metric.getKey()).getId());
+        .setMetricId(metricsByKeys.get(metricKey).getId());
       cell = new MeasureCell(measure, true);
-      table.put(component.uuid(), metric.getKey(), cell);
+      table.put(component.uuid(), metricKey, cell);
       changer.apply(cell.getMeasure());
     } else if (changer.apply(cell.getMeasure())) {
       cell.setChanged(true);
     }
+  }
+
+  /**
+   * Round a measure value by applying the scale defined on the metric.
+   * Example: scale(0.1234) returns 0.12 if metric scale is 2
+   *
+   * @since 7.0
+   */
+  public double scale(MetricDto metric, double value) {
+    if (metric.getDecimalScale() == null) {
+      return value;
+    }
+    BigDecimal bd = BigDecimal.valueOf(value);
+    return bd.setScale(metric.getDecimalScale(), RoundingMode.HALF_UP).doubleValue();
   }
 
   private static class MeasureCell {

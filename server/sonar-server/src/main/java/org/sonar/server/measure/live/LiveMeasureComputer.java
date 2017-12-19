@@ -25,17 +25,27 @@ import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 
+/**
+ * Refresh and persist the measures of some files, directories, modules
+ * or projects.
+ *
+ * Touching a file updates the related directory, module and project.
+ * Status of Quality gate is refreshed and webhooks are triggered,
+ * if enabled.
+ */
 @ServerSide
 public interface LiveMeasureComputer {
 
   /**
    * Refresh measures of a collection of components and
-   * their ancestors. Components may be on different projects.
+   * their ancestors. Components may be on different projects or
+   * different organizations.
+   * Short-living and long-living branches are accepted.
    */
   void refresh(DbSession dbSession, Collection<ComponentDto> components);
 
   default void refresh(DbSession dbSession, ComponentDto component) {
-    refresh(dbSession, Collections.singletonList(component));
+    refresh(dbSession, Collections.singleton(component));
   }
 
 }

@@ -19,6 +19,7 @@
  */
 package org.sonar.server.qualitygate;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import org.sonar.api.ce.ComputeEngineSide;
@@ -29,7 +30,19 @@ import org.sonar.api.server.ServerSide;
 @ServerSide
 public interface QualityGateEvaluator {
 
+  /**
+   * @param measures must provide the measures related to the metrics
+   *                 defined by {@link #getMetricKeys(QualityGate)}
+   */
   EvaluatedQualityGate evaluate(QualityGate gate, Measures measures);
+
+  /**
+   * Keys of the metrics involved in the computation of gate status.
+   * It may include metrics that are not part of conditions,
+   * for instance "new_lines" for the circuit-breaker on
+   * small changesets.
+   */
+  Collection<String> getMetricKeys(QualityGate gate);
 
   interface Measures {
     Optional<Measure> get(String metricKey);

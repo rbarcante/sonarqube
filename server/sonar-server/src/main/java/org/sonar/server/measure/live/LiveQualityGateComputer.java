@@ -20,6 +20,7 @@
 package org.sonar.server.measure.live;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,9 +33,12 @@ import org.sonar.api.server.ServerSide;
 import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
+import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
+import org.sonar.db.organization.OrganizationDto;
 import org.sonar.db.qualitygate.QualityGateConditionDto;
 import org.sonar.db.qualitygate.QualityGateDto;
 import org.sonar.server.qualitygate.Condition;
@@ -43,6 +47,7 @@ import org.sonar.server.qualitygate.QualityGate;
 import org.sonar.server.qualitygate.QualityGateConverter;
 import org.sonar.server.qualitygate.QualityGateEvaluator;
 import org.sonar.server.qualitygate.QualityGateFinder;
+import org.sonar.server.qualitygate.ShortLivingBranchQualityGate;
 
 @ServerSide
 public class LiveQualityGateComputer {
@@ -57,9 +62,12 @@ public class LiveQualityGateComputer {
     this.evaluator = evaluator;
   }
 
-  EvaluatedQualityGate refreshGateStatus(DbSession dbSession, MeasureMatrix measureMatrix) {
-    ComponentDto project = measureMatrix.getProject();
-    QualityGateDto gateDto = qGateFinder.getQualityGate(dbSession, measureMatrix.getOrganization(), project).getQualityGate();
+  QualityGate loadQualityGate(DbSession dbSession, OrganizationDto organization, ComponentDto project, BranchDto branch) {
+    if (branch.getBranchType() == BranchType.SHORT) {
+      return ShortLivingBranchQualityGate.GATE;
+    }
+
+    QualityGateDto gateDto = qGateFinder.getQualityGate(dbSession, organization, project).getQualityGate();
     Collection<QualityGateConditionDto> conditionDtos = dbClient.gateConditionDao().selectForQualityGate(dbSession, gateDto.getId());
     Set<Integer> metricIds = conditionDtos.stream().map(c -> (int) c.getMetricId())
       .collect(MoreCollectors.toHashSet(conditionDtos.size()));
@@ -73,24 +81,33 @@ public class LiveQualityGateComputer {
       return new Condition(metricKey, operator, conditionDto.getErrorThreshold(), conditionDto.getWarningThreshold(), onLeak);
     }).collect(MoreCollectors.toHashSet(conditionDtos.size()));
 
-    QualityGate gate = new QualityGate(String.valueOf(gateDto.getId()), gateDto.getName(), conditions);
+    return new QualityGate(String.valueOf(gateDto.getId()), gateDto.getName(), conditions);
+  }
 
+  EvaluatedQualityGate refreshGateStatus(ComponentDto project, QualityGate gate, MeasureMatrix measureMatrix) {
     QualityGateEvaluator.Measures measures = metricKey -> {
       Optional<LiveMeasureDto> liveMeasureDto = measureMatrix.getMeasure(project, metricKey);
       if (!liveMeasureDto.isPresent()) {
         return Optional.empty();
       }
-      MetricDto metric = metricsById.get(liveMeasureDto.get().getMetricId());
+      MetricDto metric = measureMatrix.getMetric(liveMeasureDto.get().getMetricId());
       return Optional.of(new LiveMeasure(liveMeasureDto.get(), metric));
     };
 
-
     EvaluatedQualityGate evaluatedGate = evaluator.evaluate(gate, measures);
 
-    measureMatrix.setValue(project, CoreMetrics.ALERT_STATUS, evaluatedGate.getStatus().name());
-    measureMatrix.setValue(project, CoreMetrics.QUALITY_GATE_DETAILS, QualityGateConverter.toJson(evaluatedGate));
+    measureMatrix.setValue(project, CoreMetrics.ALERT_STATUS_KEY, evaluatedGate.getStatus().name());
+    measureMatrix.setValue(project, CoreMetrics.QUALITY_GATE_DETAILS_KEY, QualityGateConverter.toJson(evaluatedGate));
 
     return evaluatedGate;
+  }
+
+  Collection<String> getMetricsRelatedTo(QualityGate gate) {
+    Set<String> metricKeys = new HashSet<>();
+    metricKeys.add(CoreMetrics.ALERT_STATUS_KEY);
+    metricKeys.add(CoreMetrics.QUALITY_GATE_DETAILS_KEY);
+    metricKeys.addAll(evaluator.getMetricKeys(gate));
+    return metricKeys;
   }
 
   private static class LiveMeasure implements QualityGateEvaluator.Measure {

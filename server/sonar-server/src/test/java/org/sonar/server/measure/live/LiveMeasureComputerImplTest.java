@@ -37,9 +37,13 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
+import org.sonar.server.qualitygate.changeevent.QGChangeEventListeners;
+import org.sonar.server.settings.ProjectConfigurationLoader;
+import org.sonar.server.settings.TestProjectConfigurationLoader;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 
 public class LiveMeasureComputerImplTest {
@@ -49,7 +53,6 @@ public class LiveMeasureComputerImplTest {
   @Rule
   public ExpectedException expectedException = ExpectedException.none();
 
-  private final MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
   private MetricDto intMetric;
   private MetricDto ratingMetric;
   private ComponentDto project;
@@ -61,7 +64,7 @@ public class LiveMeasureComputerImplTest {
   public void setUp() throws Exception {
     intMetric = db.measures().insertMetric(m -> m.setValueType(Metric.ValueType.INT.name()));
     ratingMetric = db.measures().insertMetric(m -> m.setValueType(Metric.ValueType.RATING.name()));
-    project = db.components().insertPrivateProject();
+    project = db.components().insertMainBranch();
     dir = db.components().insertComponent(ComponentTesting.newDirectory(project, "src/main/java"));
     file1 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
     file2 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
@@ -185,7 +188,7 @@ public class LiveMeasureComputerImplTest {
   @Test
   public void refresh_multiple_projects_at_the_same_time() {
     markProjectAsAnalyzed(project);
-    ComponentDto project2 = db.components().insertPrivateProject();
+    ComponentDto project2 = db.components().insertMainBranch();
     ComponentDto fileInProject2 = db.components().insertComponent(ComponentTesting.newFileDto(project2));
     markProjectAsAnalyzed(project2);
 
@@ -200,6 +203,11 @@ public class LiveMeasureComputerImplTest {
 
     // no other measures generated
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(5);
+  }
+
+  @Test
+  public void refresh_multiple_branches_at_the_same_time() {
+    // FIXME
   }
 
   @Test
@@ -221,10 +229,12 @@ public class LiveMeasureComputerImplTest {
 
   private void run(Collection<ComponentDto> components, IssueMetricFormula... formulas) {
     IssueMetricFormulaFactory formulaFactory = new TestIssueMetricFormulaFactory(asList(formulas));
-    MeasureMatrixLoader matrixLoader = new MeasureMatrixLoader(db.getDbClient());
 
     LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class);
-    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), matrixLoader, settings.asConfig(), formulaFactory, qGateComputer);
+    MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
+    ProjectConfigurationLoader configurationLoader = new TestProjectConfigurationLoader(settings.asConfig());
+    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer,
+      configurationLoader, mock(QGChangeEventListeners.class, RETURNS_DEEP_STUBS));
     underTest.refresh(db.getSession(), components);
   }
 

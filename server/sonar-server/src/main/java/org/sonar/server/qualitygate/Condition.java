@@ -25,6 +25,7 @@ import java.util.stream.Stream;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+import org.sonar.db.qualitygate.QualityGateConditionDto;
 
 import static java.util.Objects.requireNonNull;
 
@@ -109,7 +110,10 @@ public class Condition {
   }
 
   public enum Operator {
-    EQUALS("EQ"), NOT_EQUALS("NE"), GREATER_THAN("GT"), LESS_THAN("LT");
+    EQUALS(QualityGateConditionDto.OPERATOR_EQUALS),
+    NOT_EQUALS(QualityGateConditionDto.OPERATOR_NOT_EQUALS),
+    GREATER_THAN(QualityGateConditionDto.OPERATOR_GREATER_THAN),
+    LESS_THAN(QualityGateConditionDto.OPERATOR_LESS_THAN);
 
     private final String dbValue;
 

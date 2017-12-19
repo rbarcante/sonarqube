@@ -31,10 +31,6 @@ public class QualityGateConverter {
     // prevent instantiation
   }
 
-  public static String toLabel(QualityGate gate) {
-    return "";
-  }
-
   public static String toJson(EvaluatedQualityGate gate) {
     JsonObject details = new JsonObject();
     details.addProperty(FIELD_LEVEL, gate.getStatus().name());

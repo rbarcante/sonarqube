@@ -17,21 +17,29 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.server.measure.live;
+package org.sonar.server.settings;
 
-import org.junit.Test;
-import org.sonar.core.platform.ComponentContainer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import org.sonar.api.config.Configuration;
+import org.sonar.db.DbSession;
+import org.sonar.db.component.ComponentDto;
 
-import static org.assertj.core.api.Assertions.assertThat;
+public class TestProjectConfigurationLoader implements ProjectConfigurationLoader {
 
-public class LiveMeasureModuleTest {
+  private final Configuration config;
 
-  @Test
-  public void verify_count_of_added_components() {
-    ComponentContainer container = new ComponentContainer();
-    new LiveMeasureModule().configure(container);
-    assertThat(container.size()).isEqualTo(3 + 2);
+  public TestProjectConfigurationLoader(Configuration config) {
+    this.config = config;
   }
 
-
+  @Override
+  public Map<String, Configuration> loadProjectConfigurations(DbSession dbSession, Set<ComponentDto> projects) {
+    Map<String, Configuration> map = new HashMap<>();
+    for (ComponentDto project : projects) {
+      map.put(project.uuid(), config);
+    }
+    return map;
+  }
 }
