@@ -41,13 +41,15 @@ import org.sonar.db.metric.MetricDto;
 import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.DebtRatingGrid;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
-import org.sonar.server.measure.index.ProjectMeasuresIndexer;
+import org.sonar.server.es.ProjectIndexer;
+import org.sonar.server.es.ProjectIndexers;
 import org.sonar.server.qualitygate.EvaluatedQualityGate;
 import org.sonar.server.qualitygate.QualityGate;
 import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
 import static java.util.stream.Collectors.groupingBy;
 import static org.sonar.core.util.stream.MoreCollectors.toArrayList;
 import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
@@ -58,15 +60,15 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
   private final IssueMetricFormulaFactory formulaFactory;
   private final LiveQualityGateComputer qGateComputer;
   private final ProjectConfigurationLoader projectConfigurationLoader;
-  private final ProjectMeasuresIndexer projectMeasuresIndexer;
+  private final ProjectIndexers projectIndexer;
 
   public LiveMeasureComputerImpl(DbClient dbClient, IssueMetricFormulaFactory formulaFactory,
-                                 LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader, ProjectMeasuresIndexer projectMeasuresIndexer) {
+    LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader, ProjectIndexers projectIndexer) {
     this.dbClient = dbClient;
     this.formulaFactory = formulaFactory;
     this.qGateComputer = qGateComputer;
     this.projectConfigurationLoader = projectConfigurationLoader;
-    this.projectMeasuresIndexer = projectMeasuresIndexer;
+    this.projectIndexer = projectIndexer;
   }
 
   @Override
@@ -100,9 +102,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     QualityGate qualityGate = qGateComputer.loadQualityGate(dbSession, organization, project, branch);
     Collection<String> metricKeys = getKeysOfAllInvolvedMetrics(qualityGate);
 
-    List<MetricDto> metrics = dbClient.metricDao().selectByKeys(dbSession, metricKeys);
-    Map<Integer, MetricDto> metricsPerId = metrics
-      .stream()
+    Map<Integer, MetricDto> metricsPerId = dbClient.metricDao().selectByKeys(dbSession, metricKeys).stream()
       .collect(uniqueIndex(MetricDto::getId));
     List<String> componentUuids = components.stream().map(ComponentDto::uuid).collect(toArrayList(components.size()));
     List<LiveMeasureDto> dbMeasures = dbClient.liveMeasureDao().selectByComponentUuidsAndMetricIds(dbSession, componentUuids, metricsPerId.keySet());
@@ -110,7 +110,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     Configuration config = projectConfigurationLoader.loadProjectConfiguration(dbSession, project);
     DebtRatingGrid debtRatingGrid = new DebtRatingGrid(config);
 
-    MeasureMatrix matrix = new MeasureMatrix(components, metrics, dbMeasures);
+    MeasureMatrix matrix = new MeasureMatrix(components, metricsPerId.values(), dbMeasures);
     components.forEach(c -> {
       IssueCounter issueCounter = new IssueCounter(dbClient.issueDao().selectIssueGroupsByBaseComponent(dbSession, c, beginningOfLeakPeriod.orElse(Long.MAX_VALUE)));
       FormulaContextImpl context = new FormulaContextImpl(matrix, debtRatingGrid);
@@ -131,8 +131,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
 
     // persist the measures that have been created or updated
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
-    dbSession.commit();
-    projectMeasuresIndexer.indexOnAnalysis(project.uuid());
+    projectIndexer.commitAndIndex(dbSession, singleton(project), ProjectIndexer.Cause.MEASURE_CHANGE);
 
     return Optional.of(new QGChangeEvent(project, branch, lastAnalysis.get(), config, () -> Optional.of(evaluatedQualityGate)));
   }

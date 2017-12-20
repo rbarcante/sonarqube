@@ -30,7 +30,6 @@ import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.resources.Qualifiers;
-import org.sonar.api.utils.System2;
 import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
@@ -38,12 +37,8 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
-import org.sonar.server.es.EsTester;
-import org.sonar.server.measure.index.ProjectMeasuresIndex;
-import org.sonar.server.measure.index.ProjectMeasuresIndexDefinition;
-import org.sonar.server.measure.index.ProjectMeasuresIndexer;
-import org.sonar.server.measure.index.ProjectMeasuresQuery;
-import org.sonar.server.permission.index.AuthorizationTypeSupport;
+import org.sonar.server.es.ProjectIndexer;
+import org.sonar.server.es.TestProjectIndexers;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 import org.sonar.server.settings.TestProjectConfigurationLoader;
 
@@ -56,12 +51,9 @@ public class LiveMeasureComputerImplTest {
   @Rule
   public DbTester db = DbTester.create();
   @Rule
-  public EsTester es = new EsTester(new ProjectMeasuresIndexDefinition(new MapSettings().asConfig()));
-  @Rule
   public ExpectedException expectedException = ExpectedException.none();
 
-  private ProjectMeasuresIndexer projectMeasuresIndexer = new ProjectMeasuresIndexer(db.getDbClient(), es.client());;
-  private ProjectMeasuresIndex projectMeasuresIndex = new ProjectMeasuresIndex(es.client(), mock(AuthorizationTypeSupport.class), System2.INSTANCE);
+  private TestProjectIndexers projectIndexer = new TestProjectIndexers();
 
   private MetricDto intMetric;
   private MetricDto ratingMetric;
@@ -78,7 +70,6 @@ public class LiveMeasureComputerImplTest {
     dir = db.components().insertComponent(ComponentTesting.newDirectory(project, "src/main/java"));
     file1 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
     file2 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
-    projectMeasuresIndexer.indexOnAnalysis(project.uuid());
   }
 
   @Test
@@ -97,8 +88,7 @@ public class LiveMeasureComputerImplTest {
     assertThatRatingMeasureHasValue(dir, Rating.C);
     assertThatIntMeasureHasValue(project, 4);
     assertThatRatingMeasureHasValue(project, Rating.C);
-    ProjectMeasuresQuery esQuery = new ProjectMeasuresQuery().setQueryText(String.format("%s='C' and %s=4", ratingMetric.getKey(), intMetric.getKey()));
-    // List<String> uuids = projectMeasuresIndex.search(esQuery, new SearchOptions()).getIds();
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -113,6 +103,7 @@ public class LiveMeasureComputerImplTest {
     run(file1, newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(4);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
 
     assertThatIntMeasureHasValue(file1, 1.0);
     assertThatIntMeasureHasValue(dir, 2.0);
@@ -134,6 +125,7 @@ public class LiveMeasureComputerImplTest {
 
     LiveMeasureDto measure = assertThatIntMeasureHasValue(project, 44.0);
     assertThat(measure.getVariation()).isEqualTo(14.0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -149,6 +141,7 @@ public class LiveMeasureComputerImplTest {
 
     LiveMeasureDto measure = assertThatRatingMeasureHasValue(project, Rating.C);
     assertThat(measure.getVariation()).isEqualTo(-1.0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -164,6 +157,7 @@ public class LiveMeasureComputerImplTest {
 
     LiveMeasureDto measure = assertThatRatingMeasureHasValue(project, Rating.B);
     assertThat(measure.getVariation()).isEqualTo(-2.0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -181,6 +175,7 @@ public class LiveMeasureComputerImplTest {
     assertThatIntMeasureHasLeakValue(file1, 1.0);
     assertThatIntMeasureHasLeakValue(dir, 2.0);
     assertThatIntMeasureHasLeakValue(project, 3.0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -189,6 +184,7 @@ public class LiveMeasureComputerImplTest {
     run(file1, newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isFalse();
   }
 
   @Test
@@ -196,6 +192,7 @@ public class LiveMeasureComputerImplTest {
     run(Collections.emptyList(), newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(0);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isFalse();
   }
 
   @Test
@@ -216,6 +213,8 @@ public class LiveMeasureComputerImplTest {
 
     // no other measures generated
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(5);
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThat(projectIndexer.hasBeenCalled(project2.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
   }
 
   @Test
@@ -247,7 +246,7 @@ public class LiveMeasureComputerImplTest {
     MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
     ProjectConfigurationLoader configurationLoader = new TestProjectConfigurationLoader(settings.asConfig());
 
-    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader, projectMeasuresIndexer);
+    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader, projectIndexer);
 
     underTest.refresh(db.getSession(), components);
   }
