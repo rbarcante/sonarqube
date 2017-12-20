@@ -23,7 +23,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.OptionalDouble;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.Rule;
 import org.junit.Test;
@@ -677,14 +677,20 @@ public class IssueMetricFormulaFactoryImplTest {
 
   private class Verifier {
     private final IssueGroupDto[] groups;
-    private final Map<Metric, Double> doubleMeasures = new HashMap<>();
+    private final Map<Metric, Double> values = new HashMap<>();
+    private final Map<Metric, Double> leakValues = new HashMap<>();
 
     private Verifier(IssueGroupDto[] groups) {
       this.groups = groups;
     }
 
     Verifier and(Metric metric, double value) {
-      this.doubleMeasures.put(metric, value);
+      this.values.put(metric, value);
+      return this;
+    }
+
+    Verifier andLeak(Metric metric, double value) {
+      this.leakValues.put(metric, value);
       return this;
     }
 
@@ -696,13 +702,13 @@ public class IssueMetricFormulaFactoryImplTest {
 
     Verifier assertThatLeakValueIs(Metric metric, double expectedValue) {
       TestContext context = run(metric, true);
-      assertThat(context.doubleValue).isNotNull().isEqualTo(expectedValue);
+      assertThat(context.doubleLeakValue).isNotNull().isEqualTo(expectedValue);
       return this;
     }
 
     Verifier assertThatLeakValueIs(Metric metric, Rating expectedRating) {
       TestContext context = run(metric, true);
-      assertThat(context.ratingValue).isNotNull().isEqualTo(expectedRating);
+      assertThat(context.ratingLeakValue).isNotNull().isEqualTo(expectedRating);
       return this;
     }
 
@@ -718,7 +724,7 @@ public class IssueMetricFormulaFactoryImplTest {
         .findFirst()
         .get();
       assertThat(formula.isOnLeak()).isEqualTo(expectLeakFormula);
-      TestContext context = new TestContext(formula.getDependentMetrics(), doubleMeasures);
+      TestContext context = new TestContext(formula.getDependentMetrics(), values, leakValues);
       formula.compute(context, newIssueCounter(groups));
       return context;
     }
@@ -756,11 +762,15 @@ public class IssueMetricFormulaFactoryImplTest {
     private final Set<Metric> dependentMetrics;
     private Double doubleValue;
     private Rating ratingValue;
-    private final Map<Metric, Double> doubleMeasures;
+    private Double doubleLeakValue;
+    private Rating ratingLeakValue;
+    private final Map<Metric, Double> values;
+    private final Map<Metric, Double> leakValues;
 
-    private TestContext(Collection<Metric> dependentMetrics, Map<Metric, Double> doubleMeasures) {
+    private TestContext(Collection<Metric> dependentMetrics, Map<Metric, Double> values, Map<Metric, Double> leakValues) {
       this.dependentMetrics = new HashSet<>(dependentMetrics);
-      this.doubleMeasures = doubleMeasures;
+      this.values = values;
+      this.leakValues = leakValues;
     }
 
     @Override
@@ -774,14 +784,25 @@ public class IssueMetricFormulaFactoryImplTest {
     }
 
     @Override
-    public OptionalDouble getValue(Metric metric) {
+    public Optional<Double> getValue(Metric metric) {
       if (!dependentMetrics.contains(metric)) {
         throw new IllegalStateException("Metric " + metric.getKey() + " is not declared as a dependency");
       }
-      if (doubleMeasures.containsKey(metric)) {
-        return OptionalDouble.of(doubleMeasures.get(metric));
+      if (values.containsKey(metric)) {
+        return Optional.of(values.get(metric));
       }
-      return OptionalDouble.empty();
+      return Optional.empty();
+    }
+
+    @Override
+    public Optional<Double> getLeakValue(Metric metric) {
+      if (!dependentMetrics.contains(metric)) {
+        throw new IllegalStateException("Metric " + metric.getKey() + " is not declared as a dependency");
+      }
+      if (leakValues.containsKey(metric)) {
+        return Optional.of(leakValues.get(metric));
+      }
+      return Optional.empty();
     }
 
     @Override
@@ -792,6 +813,16 @@ public class IssueMetricFormulaFactoryImplTest {
     @Override
     public void setValue(Rating value) {
       this.ratingValue = value;
+    }
+
+    @Override
+    public void setLeakValue(double value) {
+      this.doubleLeakValue = value;
+    }
+
+    @Override
+    public void setLeakValue(Rating value) {
+      this.ratingLeakValue = value;
     }
   }
 }

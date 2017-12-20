@@ -20,7 +20,7 @@
 package org.sonar.server.measure.live;
 
 import java.util.Collection;
-import java.util.OptionalDouble;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import org.sonar.api.measures.Metric;
 import org.sonar.db.component.ComponentDto;
@@ -74,10 +74,16 @@ class IssueMetricFormula {
      * The metric must be declared in the formula dependencies
      * (see {@link IssueMetricFormula#getDependentMetrics()}).
      */
-    OptionalDouble getValue(Metric metric);
+    Optional<Double> getValue(Metric metric);
+
+    Optional<Double> getLeakValue(Metric metric);
 
     void setValue(double value);
 
     void setValue(Rating value);
+
+    void setLeakValue(double value);
+
+    void setLeakValue(Rating value);
   }
 }

@@ -19,13 +19,15 @@
  */
 package org.sonar.server.measure.live;
 
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.Mockito;
 import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.measures.Metric;
@@ -39,10 +41,13 @@ import org.sonar.db.metric.MetricDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
 import org.sonar.server.es.ProjectIndexer;
 import org.sonar.server.es.TestProjectIndexers;
+import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 import org.sonar.server.settings.TestProjectConfigurationLoader;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
@@ -54,7 +59,6 @@ public class LiveMeasureComputerImplTest {
   public ExpectedException expectedException = ExpectedException.none();
 
   private TestProjectIndexers projectIndexer = new TestProjectIndexers();
-
   private MetricDto intMetric;
   private MetricDto ratingMetric;
   private ComponentDto project;
@@ -76,7 +80,7 @@ public class LiveMeasureComputerImplTest {
   public void compute_and_insert_measures_if_they_dont_exist_yet() {
     markProjectAsAnalyzed(project);
 
-    run(asList(file1, file2), newIncrementalFormula(), newRatingConstantFormula(Rating.C));
+    List<QGChangeEvent> result = run(asList(file1, file2), newIncrementalFormula(), newRatingConstantFormula(Rating.C));
 
     // 2 measures per component have been created
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(8);
@@ -88,7 +92,7 @@ public class LiveMeasureComputerImplTest {
     assertThatRatingMeasureHasValue(dir, Rating.C);
     assertThatIntMeasureHasValue(project, 4);
     assertThatRatingMeasureHasValue(project, Rating.C);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
   }
 
   @Test
@@ -100,10 +104,10 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(file2, intMetric, m -> m.setValue(42.0));
 
     // generates values 1, 2, 3
-    run(file1, newIncrementalFormula());
+    List<QGChangeEvent> result = run(file1, newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(4);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
 
     assertThatIntMeasureHasValue(file1, 1.0);
     assertThatIntMeasureHasValue(dir, 2.0);
@@ -121,11 +125,11 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(project, intMetric, m -> m.setValue(42.0).setVariation(12.0));
 
     // new value is 44, so variation on leak period is 44-30=14
-    run(file1, newIntConstantFormula(44.0));
+    List<QGChangeEvent> result = run(file1, newIntConstantFormula(44.0));
 
     LiveMeasureDto measure = assertThatIntMeasureHasValue(project, 44.0);
     assertThat(measure.getVariation()).isEqualTo(14.0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
   }
 
   @Test
@@ -137,11 +141,11 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double) Rating.B.getIndex()).setData("B").setVariation(-2.0));
 
     // new value is C, so variation on leak period is D to C = -1
-    run(file1, newRatingConstantFormula(Rating.C));
+    List<QGChangeEvent> result = run(file1, newRatingConstantFormula(Rating.C));
 
     LiveMeasureDto measure = assertThatRatingMeasureHasValue(project, Rating.C);
     assertThat(measure.getVariation()).isEqualTo(-1.0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
   }
 
   @Test
@@ -153,11 +157,11 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setValue((double) Rating.B.getIndex()).setData("B").setVariation(-2.0));
 
     // new value is still B, so variation on leak period is still -2
-    run(file1, newRatingConstantFormula(Rating.B));
+    List<QGChangeEvent> result = run(file1, newRatingConstantFormula(Rating.B));
 
     LiveMeasureDto measure = assertThatRatingMeasureHasValue(project, Rating.B);
     assertThat(measure.getVariation()).isEqualTo(-2.0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
   }
 
   @Test
@@ -168,31 +172,31 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(file1, intMetric, m -> m.setVariation(42.0).setValue(null));
 
     // generates values 1, 2, 3 on leak measures
-    run(file1, newIncrementalLeakFormula());
+    List<QGChangeEvent> result = run(file1, newIncrementalLeakFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(3);
 
     assertThatIntMeasureHasLeakValue(file1, 1.0);
     assertThatIntMeasureHasLeakValue(dir, 2.0);
     assertThatIntMeasureHasLeakValue(project, 3.0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project);
   }
 
   @Test
   public void do_nothing_if_project_has_not_being_analyzed() {
     // project has no snapshots
-    run(file1, newIncrementalFormula());
+    List<QGChangeEvent> result = run(file1, newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isFalse();
+    assertThatProjectNotChanged(result, project);
   }
 
   @Test
   public void do_nothing_if_input_components_are_empty() {
-    run(Collections.emptyList(), newIncrementalFormula());
+    List<QGChangeEvent> result = run(emptyList(), newIncrementalFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(0);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isFalse();
+    assertThatProjectNotChanged(result, project);
   }
 
   @Test
@@ -202,7 +206,7 @@ public class LiveMeasureComputerImplTest {
     ComponentDto fileInProject2 = db.components().insertComponent(ComponentTesting.newFileDto(project2));
     markProjectAsAnalyzed(project2);
 
-    run(asList(file1, fileInProject2), newQualifierBasedFormula());
+    List<QGChangeEvent> result = run(asList(file1, fileInProject2), newQualifierBasedFormula());
 
     // generated values depend on position of qualifier in Qualifiers.ORDERED_BOTTOM_UP (see formula)
     assertThatIntMeasureHasValue(file1, 0);
@@ -213,8 +217,7 @@ public class LiveMeasureComputerImplTest {
 
     // no other measures generated
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(5);
-    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
-    assertThat(projectIndexer.hasBeenCalled(project2.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    assertThatProjectChanged(result, project, project2);
   }
 
   @Test
@@ -235,20 +238,20 @@ public class LiveMeasureComputerImplTest {
     }));
   }
 
-  private void run(ComponentDto component, IssueMetricFormula... formulas) {
-    run(Collections.singletonList(component), formulas);
+  private List<QGChangeEvent> run(ComponentDto component, IssueMetricFormula... formulas) {
+    return run(singleton(component), formulas);
   }
 
-  private void run(Collection<ComponentDto> components, IssueMetricFormula... formulas) {
+  private List<QGChangeEvent> run(Collection<ComponentDto> components, IssueMetricFormula... formulas) {
     IssueMetricFormulaFactory formulaFactory = new TestIssueMetricFormulaFactory(asList(formulas));
 
-    LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class);
+    LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class, Mockito.RETURNS_DEEP_STUBS);
     MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
     ProjectConfigurationLoader configurationLoader = new TestProjectConfigurationLoader(settings.asConfig());
 
     LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader, projectIndexer);
 
-    underTest.refresh(db.getSession(), components);
+    return underTest.refresh(db.getSession(), components);
   }
 
   private void markProjectAsAnalyzed(ComponentDto p) {
@@ -310,7 +313,7 @@ public class LiveMeasureComputerImplTest {
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
     AtomicInteger counter = new AtomicInteger();
     return new IssueMetricFormula(metric, true, (ctx, issues) -> {
-      ctx.setValue((double) counter.incrementAndGet());
+      ctx.setLeakValue((double) counter.incrementAndGet());
     });
   }
 
@@ -319,5 +322,19 @@ public class LiveMeasureComputerImplTest {
     return new IssueMetricFormula(metric, false, (ctx, issues) -> {
       ctx.setValue(Qualifiers.ORDERED_BOTTOM_UP.indexOf(ctx.getComponent().qualifier()));
     });
+  }
+
+  private void assertThatProjectChanged(List<QGChangeEvent> events, ComponentDto... projects) {
+    for (ComponentDto p : projects) {
+      assertThat(projectIndexer.hasBeenCalled(p.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isTrue();
+    }
+
+    assertThat(events).extracting(e -> e.getProject().uuid())
+      .containsExactlyInAnyOrder(Arrays.stream(projects).map(ComponentDto::uuid).toArray(String[]::new));
+  }
+
+  private void assertThatProjectNotChanged(List<QGChangeEvent> events, ComponentDto project) {
+    assertThat(projectIndexer.hasBeenCalled(project.uuid(), ProjectIndexer.Cause.MEASURE_CHANGE)).isFalse();
+    assertThat(events).hasSize(0);
   }
 }

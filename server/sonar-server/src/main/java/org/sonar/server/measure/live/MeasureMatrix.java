@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -77,17 +76,9 @@ class MeasureMatrix {
   }
 
   Optional<LiveMeasureDto> getMeasure(ComponentDto component, String metricKey) {
-    MeasureCell cell = table.get(component.uuid(), metricKey);
-    return cell == null ? Optional.empty() : Optional.of(cell.measure);
-  }
-
-  OptionalDouble getValue(ComponentDto component, String metricKey) {
     checkArgument(table.containsColumn(metricKey), "Metric with key %s is not registered", metricKey);
     MeasureCell cell = table.get(component.uuid(), metricKey);
-    if (cell == null || cell.getMeasure().getValue() == null) {
-      return OptionalDouble.empty();
-    }
-    return OptionalDouble.of(cell.getMeasure().getValue());
+    return cell == null ? Optional.empty() : Optional.of(cell.measure);
   }
 
   void setValue(ComponentDto component, String metricKey, double value) {
@@ -181,7 +172,7 @@ class MeasureMatrix {
    *
    * @since 7.0
    */
-  public double scale(MetricDto metric, double value) {
+  private static double scale(MetricDto metric, double value) {
     if (metric.getDecimalScale() == null) {
       return value;
     }
@@ -191,7 +182,7 @@ class MeasureMatrix {
 
   private static class MeasureCell {
     private final LiveMeasureDto measure;
-    private boolean changed = false;
+    private boolean changed;
 
     private MeasureCell(LiveMeasureDto measure, boolean changed) {
       this.measure = measure;

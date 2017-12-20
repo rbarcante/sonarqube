@@ -21,6 +21,7 @@ package org.sonar.server.measure.live;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Optional;
 import javax.annotation.Nullable;
 import org.junit.Rule;
 import org.junit.Test;
@@ -74,26 +75,17 @@ public class MeasureMatrixTest {
     LiveMeasureDto measure = newMeasure(metric, PROJECT).setValue(null);
     MeasureMatrix underTest = new MeasureMatrix(asList(PROJECT), asList(metric), asList(measure));
 
-    assertThat(underTest.getValue(FILE, metric.getKey())).isEmpty();
+    assertThat(underTest.getMeasure(FILE, metric.getKey())).isEmpty();
   }
 
   @Test
-  public void getValue_returns_empty_if_measure_does_not_have_value() {
-    MetricDto metric = newMetricDto();
-    LiveMeasureDto measure = newMeasure(metric, PROJECT).setValue(null);
-    MeasureMatrix underTest = new MeasureMatrix(asList(PROJECT), asList(metric), asList(measure));
-
-    assertThat(underTest.getValue(PROJECT, metric.getKey())).isEmpty();
-  }
-
-  @Test
-  public void getValue_throws_IAE_if_metric_is_not_registered() {
+  public void getMeasure_throws_IAE_if_metric_is_not_registered() {
     MeasureMatrix underTest = new MeasureMatrix(asList(PROJECT), asList(METRIC_1), emptyList());
 
     expectedException.expect(IllegalArgumentException.class);
     expectedException.expectMessage("Metric with key _missing_ is not registered");
 
-    underTest.getValue(PROJECT, "_missing_");
+    underTest.getMeasure(PROJECT, "_missing_");
   }
 
   @Test
@@ -106,16 +98,16 @@ public class MeasureMatrixTest {
 
     assertThat(underTest.getMeasure(PROJECT, metric.getKey()).get().getValue()).isEqualTo(3.14);
     assertThat(underTest.getChanged()).hasSize(1);
-    assertThat(underTest.getValue(PROJECT, metric.getKey())).hasValue(3.14);
-
 
     underTest.setValue(PROJECT, metric.getKey(), 3.148);
     verifyValue(underTest, PROJECT, metric, 3.15);
     verifyVariation(underTest, PROJECT, metric, null);
   }
 
-  private void verifyValue(MeasureMatrix underTest, ComponentDto component, MetricDto metric, double expectedValue) {
-    assertThat(underTest.getValue(component, metric.getKey())).hasValue(expectedValue);
+  private void verifyValue(MeasureMatrix underTest, ComponentDto component, MetricDto metric, @Nullable Double expectedValue) {
+    Optional<LiveMeasureDto> measure = underTest.getMeasure(component, metric.getKey());
+    assertThat(measure).isPresent();
+    assertThat(measure.get().getValue()).isEqualTo(expectedValue);
   }
 
   private void verifyVariation(MeasureMatrix underTest, ComponentDto component, MetricDto metric, @Nullable Double expectedVariation) {
@@ -131,7 +123,7 @@ public class MeasureMatrixTest {
     underTest.setValue(PROJECT, metric.getKey(), 3.14159);
 
     assertThat(underTest.getChanged()).isEmpty();
-    assertThat(underTest.getValue(PROJECT, metric.getKey())).hasValue(3.14);
+    verifyValue(underTest, PROJECT, metric, 3.14);
   }
 
   @Test
@@ -180,6 +172,23 @@ public class MeasureMatrixTest {
 
     assertThat(underTest.getMeasure(PROJECT, METRIC_1.getKey()).get().getDataAsString()).isEqualTo("bar");
     assertThat(underTest.getChanged()).extracting(LiveMeasureDto::getDataAsString).containsExactly("bar");
+  }
+
+  @Test
+  public void setLeakValue_rounds_up_and_updates_value() {
+    MetricDto metric = newMetricDto().setDecimalScale(2);
+    LiveMeasureDto measure = newMeasure(metric, PROJECT).setValue(null);
+    MeasureMatrix underTest = new MeasureMatrix(asList(PROJECT), asList(metric), asList(measure));
+
+    underTest.setLeakValue(PROJECT, metric.getKey(), 3.14159);
+    verifyVariation(underTest, PROJECT, metric, 3.14);
+    // do not update value
+    verifyValue(underTest, PROJECT, metric, null);
+
+    underTest.setLeakValue(PROJECT, metric.getKey(), 3.148);
+    verifyVariation(underTest, PROJECT, metric, 3.15);
+    // do not update value
+    verifyValue(underTest, PROJECT, metric, null);
   }
 
   private LiveMeasureDto newMeasure(MetricDto metric, ComponentDto component) {

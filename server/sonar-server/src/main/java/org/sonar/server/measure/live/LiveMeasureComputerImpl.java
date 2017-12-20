@@ -26,7 +26,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.Set;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.measures.Metric;
@@ -48,6 +47,7 @@ import org.sonar.server.qualitygate.QualityGate;
 import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.stream.Collectors.groupingBy;
@@ -201,28 +201,43 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     }
 
     @Override
-    public OptionalDouble getValue(Metric metric) {
-      return matrix.getValue(currentComponent, metric.getKey());
+    public Optional<Double> getValue(Metric metric) {
+      Optional<LiveMeasureDto> measure = matrix.getMeasure(currentComponent, metric.getKey());
+      return measure.map(LiveMeasureDto::getValue);
+    }
+
+    @Override
+    public Optional<Double> getLeakValue(Metric metric) {
+      Optional<LiveMeasureDto> measure = matrix.getMeasure(currentComponent, metric.getKey());
+      return measure.map(LiveMeasureDto::getVariation);
     }
 
     @Override
     public void setValue(double value) {
       String metricKey = currentFormula.getMetric().getKey();
-      if (currentFormula.isOnLeak()) {
-        matrix.setLeakValue(currentComponent, metricKey, value);
-      } else {
-        matrix.setValue(currentComponent, metricKey, value);
-      }
+      checkState(!currentFormula.isOnLeak(), "Formula of metric %s accepts only leak values", metricKey);
+      matrix.setValue(currentComponent, metricKey, value);
+    }
+
+    @Override
+    public void setLeakValue(double value) {
+      String metricKey = currentFormula.getMetric().getKey();
+      checkState(currentFormula.isOnLeak(), "Formula of metric %s does not accept leak values", metricKey);
+      matrix.setLeakValue(currentComponent, metricKey, value);
     }
 
     @Override
     public void setValue(Rating value) {
       String metricKey = currentFormula.getMetric().getKey();
-      if (currentFormula.isOnLeak()) {
-        matrix.setLeakValue(currentComponent, metricKey, value);
-      } else {
-        matrix.setValue(currentComponent, metricKey, value);
-      }
+      checkState(!currentFormula.isOnLeak(), "Formula of metric %s accepts only leak values", metricKey);
+      matrix.setValue(currentComponent, metricKey, value);
+    }
+
+    @Override
+    public void setLeakValue(Rating value) {
+      String metricKey = currentFormula.getMetric().getKey();
+      checkState(currentFormula.isOnLeak(), "Formula of metric %s does not accept leak values", metricKey);
+      matrix.setLeakValue(currentComponent, metricKey, value);
     }
   }
 }

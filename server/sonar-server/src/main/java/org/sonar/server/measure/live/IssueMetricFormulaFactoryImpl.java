@@ -20,7 +20,7 @@
 package org.sonar.server.measure.live;
 
 import java.util.List;
-import java.util.OptionalDouble;
+import java.util.Optional;
 import java.util.Set;
 import org.sonar.api.issue.Issue;
 import org.sonar.api.measures.CoreMetrics;
@@ -87,12 +87,12 @@ public class IssueMetricFormulaFactoryImpl implements IssueMetricFormulaFactory 
       (context, issues) -> context.setValue(issues.sumEffortOfUnresolved(RuleType.VULNERABILITY, false))),
 
     new IssueMetricFormula(CoreMetrics.SQALE_DEBT_RATIO, false,
-      (context, issues) -> context.setValue(100.0 * debtDensity(context, CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
+      (context, issues) -> context.setValue(100.0 * debtDensity(context)),
       asList(CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
 
     new IssueMetricFormula(CoreMetrics.SQALE_RATING, false,
       (context, issues) -> context
-        .setValue(context.getDebtRatingGrid().getRatingForDensity(debtDensity(context, CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST))),
+        .setValue(context.getDebtRatingGrid().getRatingForDensity(debtDensity(context))),
       asList(CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
 
     new IssueMetricFormula(CoreMetrics.EFFORT_TO_REACH_MAINTAINABILITY_RATING_A, false,
@@ -105,69 +105,78 @@ public class IssueMetricFormulaFactoryImpl implements IssueMetricFormulaFactory 
       (context, issues) -> context.setValue(RATING_BY_SEVERITY.get(issues.getHighestSeverityOfUnresolved(RuleType.VULNERABILITY, false).orElse(Severity.INFO)))),
 
     new IssueMetricFormula(CoreMetrics.NEW_CODE_SMELLS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.CODE_SMELL, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedByType(RuleType.CODE_SMELL, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_BUGS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.BUG, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedByType(RuleType.BUG, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_VULNERABILITIES, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.VULNERABILITY, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedByType(RuleType.VULNERABILITY, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolved(true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolved(true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_BLOCKER_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.BLOCKER, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedBySeverity(Severity.BLOCKER, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_CRITICAL_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.CRITICAL, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedBySeverity(Severity.CRITICAL, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_MAJOR_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.MAJOR, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedBySeverity(Severity.MAJOR, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_MINOR_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.MINOR, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedBySeverity(Severity.MINOR, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_INFO_VIOLATIONS, true,
-      (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.INFO, true))),
+      (context, issues) -> context.setLeakValue(issues.countUnresolvedBySeverity(Severity.INFO, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_TECHNICAL_DEBT, true,
-      (context, issues) -> context.setValue(issues.sumEffortOfUnresolved(RuleType.CODE_SMELL, true))),
+      (context, issues) -> context.setLeakValue(issues.sumEffortOfUnresolved(RuleType.CODE_SMELL, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_RELIABILITY_REMEDIATION_EFFORT, true,
-      (context, issues) -> context.setValue(issues.sumEffortOfUnresolved(RuleType.BUG, true))),
+      (context, issues) -> context.setLeakValue(issues.sumEffortOfUnresolved(RuleType.BUG, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_SECURITY_REMEDIATION_EFFORT, true,
-      (context, issues) -> context.setValue(issues.sumEffortOfUnresolved(RuleType.VULNERABILITY, true))),
+      (context, issues) -> context.setLeakValue(issues.sumEffortOfUnresolved(RuleType.VULNERABILITY, true))),
 
     new IssueMetricFormula(CoreMetrics.NEW_RELIABILITY_RATING, true,
       (context, issues) -> {
         String highestSeverity = issues.getHighestSeverityOfUnresolved(RuleType.BUG, true).orElse(Severity.INFO);
-        context.setValue(RATING_BY_SEVERITY.get(highestSeverity));
+        context.setLeakValue(RATING_BY_SEVERITY.get(highestSeverity));
       }),
 
     new IssueMetricFormula(CoreMetrics.NEW_SECURITY_RATING, true,
       (context, issues) -> {
         String highestSeverity = issues.getHighestSeverityOfUnresolved(RuleType.VULNERABILITY, true).orElse(Severity.INFO);
-        context.setValue(RATING_BY_SEVERITY.get(highestSeverity));
+        context.setLeakValue(RATING_BY_SEVERITY.get(highestSeverity));
       }),
 
     new IssueMetricFormula(CoreMetrics.NEW_SQALE_DEBT_RATIO, true,
-      (context, issues) -> context.setValue(100.0 * debtDensity(context, CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST)),
+      (context, issues) -> context.setLeakValue(100.0 * newDebtDensity(context)),
       asList(CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST)),
 
     new IssueMetricFormula(CoreMetrics.NEW_MAINTAINABILITY_RATING, true,
-      (context, issues) -> context.setValue(context.getDebtRatingGrid().getRatingForDensity(
-        debtDensity(context, CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST))),
+      (context, issues) -> context.setLeakValue(context.getDebtRatingGrid().getRatingForDensity(
+        newDebtDensity(context))),
       asList(CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST)));
 
   private static final Set<Metric> FORMULA_METRICS = IssueMetricFormulaFactory.extractMetrics(FORMULAS);
 
-  private static double debtDensity(IssueMetricFormula.Context context, Metric<Long> technicalDebtMetric, Metric<String> developmentCostMetric) {
-    double debt = Math.max(context.getValue(technicalDebtMetric).orElse(0.0), 0.0);
-    OptionalDouble devCost = context.getValue(developmentCostMetric);
-    if (devCost.isPresent() && Double.doubleToRawLongBits(devCost.getAsDouble()) > 0L) {
-      return debt / devCost.getAsDouble();
+  private static double debtDensity(IssueMetricFormula.Context context) {
+    double debt = Math.max(context.getValue(CoreMetrics.TECHNICAL_DEBT).orElse(0.0), 0.0);
+    Optional<Double> devCost = context.getValue(CoreMetrics.DEVELOPMENT_COST);
+    if (devCost.isPresent() && Double.doubleToRawLongBits(devCost.get()) > 0L) {
+      return debt / devCost.get();
+    }
+    return 0d;
+  }
+
+  private static double newDebtDensity(IssueMetricFormula.Context context) {
+    double debt = Math.max(context.getValue(CoreMetrics.NEW_TECHNICAL_DEBT).orElse(0.0), 0.0);
+    Optional<Double> devCost = context.getValue(CoreMetrics.NEW_DEVELOPMENT_COST);
+    if (devCost.isPresent() && Double.doubleToRawLongBits(devCost.get()) > 0L) {
+      return debt / devCost.get();
     }
     return 0d;
   }
