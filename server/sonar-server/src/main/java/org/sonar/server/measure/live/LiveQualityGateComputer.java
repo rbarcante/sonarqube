@@ -21,7 +21,6 @@ package org.sonar.server.measure.live;
 
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -30,7 +29,6 @@ import java.util.Set;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.server.ServerSide;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
@@ -48,6 +46,9 @@ import org.sonar.server.qualitygate.QualityGateConverter;
 import org.sonar.server.qualitygate.QualityGateEvaluator;
 import org.sonar.server.qualitygate.QualityGateFinder;
 import org.sonar.server.qualitygate.ShortLivingBranchQualityGate;
+
+import static org.sonar.core.util.stream.MoreCollectors.toHashSet;
+import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 @ServerSide
 public class LiveQualityGateComputer {
@@ -70,16 +71,16 @@ public class LiveQualityGateComputer {
     QualityGateDto gateDto = qGateFinder.getQualityGate(dbSession, organization, project).getQualityGate();
     Collection<QualityGateConditionDto> conditionDtos = dbClient.gateConditionDao().selectForQualityGate(dbSession, gateDto.getId());
     Set<Integer> metricIds = conditionDtos.stream().map(c -> (int) c.getMetricId())
-      .collect(MoreCollectors.toHashSet(conditionDtos.size()));
-    List<MetricDto> metrics = dbClient.metricDao().selectByIds(dbSession, metricIds);
-    Map<Integer, MetricDto> metricsById = metrics.stream().collect(MoreCollectors.uniqueIndex(MetricDto::getId));
+      .collect(toHashSet(conditionDtos.size()));
+    Map<Integer, MetricDto> metricsById = dbClient.metricDao().selectByIds(dbSession, metricIds).stream()
+      .collect(uniqueIndex(MetricDto::getId));
 
     Set<Condition> conditions = conditionDtos.stream().map(conditionDto -> {
       String metricKey = metricsById.get((int) conditionDto.getMetricId()).getKey();
       Condition.Operator operator = Condition.Operator.fromDbValue(conditionDto.getOperator());
       boolean onLeak = Objects.equals(conditionDto.getPeriod(), 1);
       return new Condition(metricKey, operator, conditionDto.getErrorThreshold(), conditionDto.getWarningThreshold(), onLeak);
-    }).collect(MoreCollectors.toHashSet(conditionDtos.size()));
+    }).collect(toHashSet(conditionDtos.size()));
 
     return new QualityGate(String.valueOf(gateDto.getId()), gateDto.getName(), conditions);
   }
