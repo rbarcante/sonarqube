@@ -30,6 +30,7 @@ import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.resources.Qualifiers;
+import org.sonar.api.utils.System2;
 import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
@@ -37,6 +38,12 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
+import org.sonar.server.es.EsTester;
+import org.sonar.server.measure.index.ProjectMeasuresIndex;
+import org.sonar.server.measure.index.ProjectMeasuresIndexDefinition;
+import org.sonar.server.measure.index.ProjectMeasuresIndexer;
+import org.sonar.server.measure.index.ProjectMeasuresQuery;
+import org.sonar.server.permission.index.AuthorizationTypeSupport;
 import org.sonar.server.settings.ProjectConfigurationLoader;
 import org.sonar.server.settings.TestProjectConfigurationLoader;
 
@@ -49,7 +56,12 @@ public class LiveMeasureComputerImplTest {
   @Rule
   public DbTester db = DbTester.create();
   @Rule
+  public EsTester es = new EsTester(new ProjectMeasuresIndexDefinition(new MapSettings().asConfig()));
+  @Rule
   public ExpectedException expectedException = ExpectedException.none();
+
+  private ProjectMeasuresIndexer projectMeasuresIndexer = new ProjectMeasuresIndexer(db.getDbClient(), es.client());;
+  private ProjectMeasuresIndex projectMeasuresIndex = new ProjectMeasuresIndex(es.client(), mock(AuthorizationTypeSupport.class), System2.INSTANCE);
 
   private MetricDto intMetric;
   private MetricDto ratingMetric;
@@ -66,6 +78,7 @@ public class LiveMeasureComputerImplTest {
     dir = db.components().insertComponent(ComponentTesting.newDirectory(project, "src/main/java"));
     file1 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
     file2 = db.components().insertComponent(ComponentTesting.newFileDto(project, dir));
+    projectMeasuresIndexer.indexOnAnalysis(project.uuid());
   }
 
   @Test
@@ -84,6 +97,8 @@ public class LiveMeasureComputerImplTest {
     assertThatRatingMeasureHasValue(dir, Rating.C);
     assertThatIntMeasureHasValue(project, 4);
     assertThatRatingMeasureHasValue(project, Rating.C);
+    ProjectMeasuresQuery esQuery = new ProjectMeasuresQuery().setQueryText(String.format("%s='C' and %s=4", ratingMetric.getKey(), intMetric.getKey()));
+    // List<String> uuids = projectMeasuresIndex.search(esQuery, new SearchOptions()).getIds();
   }
 
   @Test
@@ -231,7 +246,9 @@ public class LiveMeasureComputerImplTest {
     LiveQualityGateComputer qGateComputer = mock(LiveQualityGateComputer.class);
     MapSettings settings = new MapSettings(new PropertyDefinitions(CorePropertyDefinitions.all()));
     ProjectConfigurationLoader configurationLoader = new TestProjectConfigurationLoader(settings.asConfig());
-    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader);
+
+    LiveMeasureComputerImpl underTest = new LiveMeasureComputerImpl(db.getDbClient(), formulaFactory, qGateComputer, configurationLoader, projectMeasuresIndexer);
+
     underTest.refresh(db.getSession(), components);
   }
 

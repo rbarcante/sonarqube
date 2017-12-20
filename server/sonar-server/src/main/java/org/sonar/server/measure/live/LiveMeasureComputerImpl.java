@@ -41,6 +41,7 @@ import org.sonar.db.metric.MetricDto;
 import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.DebtRatingGrid;
 import org.sonar.server.computation.task.projectanalysis.qualitymodel.Rating;
+import org.sonar.server.measure.index.ProjectMeasuresIndexer;
 import org.sonar.server.qualitygate.EvaluatedQualityGate;
 import org.sonar.server.qualitygate.QualityGate;
 import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
@@ -57,13 +58,15 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
   private final IssueMetricFormulaFactory formulaFactory;
   private final LiveQualityGateComputer qGateComputer;
   private final ProjectConfigurationLoader projectConfigurationLoader;
+  private final ProjectMeasuresIndexer projectMeasuresIndexer;
 
   public LiveMeasureComputerImpl(DbClient dbClient, IssueMetricFormulaFactory formulaFactory,
-    LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader) {
+                                 LiveQualityGateComputer qGateComputer, ProjectConfigurationLoader projectConfigurationLoader, ProjectMeasuresIndexer projectMeasuresIndexer) {
     this.dbClient = dbClient;
     this.formulaFactory = formulaFactory;
     this.qGateComputer = qGateComputer;
     this.projectConfigurationLoader = projectConfigurationLoader;
+    this.projectMeasuresIndexer = projectMeasuresIndexer;
   }
 
   @Override
@@ -129,6 +132,7 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
     // persist the measures that have been created or updated
     matrix.getChanged().forEach(m -> dbClient.liveMeasureDao().insertOrUpdate(dbSession, m, null));
     dbSession.commit();
+    projectMeasuresIndexer.indexOnAnalysis(project.uuid());
 
     return Optional.of(new QGChangeEvent(project, branch, lastAnalysis.get(), config, () -> Optional.of(evaluatedQualityGate)));
   }
