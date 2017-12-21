@@ -30,11 +30,14 @@ import org.junit.Test;
 import org.sonarqube.qa.util.Tester;
 import org.sonarqube.ws.Issues;
 import org.sonarqube.ws.Measures;
+import org.sonarqube.ws.Projects.CreateWsResponse.Project;
+import org.sonarqube.ws.Qualitygates;
 import org.sonarqube.ws.client.issues.DoTransitionRequest;
 import org.sonarqube.ws.client.issues.SearchRequest;
 import org.sonarqube.ws.client.issues.SetSeverityRequest;
 import org.sonarqube.ws.client.issues.SetTypeRequest;
 import org.sonarqube.ws.client.measures.ComponentRequest;
+import org.sonarqube.ws.client.qualitygates.CreateConditionRequest;
 import util.ItUtils;
 
 import static java.util.Arrays.asList;
@@ -58,8 +61,13 @@ public class LiveMeasuresTest {
   @Test
   public void refresh_measures_when_touching_ws_from_web_services() {
     ItUtils.restoreProfile(orchestrator, getClass().getResource("/measure/LiveMeasuresTest/one-bug-per-line-profile.xml"));
-    orchestrator.getServer().provisionProject(PROJECT_KEY, "LiveMeasuresTestExample");
+    Project project = tester.projects().provision(r -> r.setProject(PROJECT_KEY).setName("LiveMeasuresTestExample"));
     orchestrator.getServer().associateProjectToQualityProfile(PROJECT_KEY, "xoo", "one-bug-per-line-profile");
+    // quality gate on Security Rating: Warning when greater than A and Error when greater than C
+    Qualitygates.CreateResponse simple = tester.qGates().generate();
+    tester.qGates().service().createCondition(new CreateConditionRequest().setGateId(String.valueOf(simple.getId()))
+      .setMetric("security_rating").setOp("GT").setWarning("1").setError("3"));
+    tester.qGates().associateProject(simple, project);
     scanSample();
 
     expectMeasures("bugs", 1, 3, 4, 4);
@@ -69,6 +77,7 @@ public class LiveMeasuresTest {
     expectMeasures("reliability_rating", 3, 3, 3, 3);
     // zero vulnerabilities -> rating is A (1)
     expectMeasures("security_rating", 1, 1, 1, 1);
+    assertQualityGate("OK");
 
     // mark a bug as FP
     Issues.Issue issue = getFirstIssue(FILE_WITH_ONE_LINE_KEY, "BUG");
@@ -89,17 +98,18 @@ public class LiveMeasuresTest {
     expectMeasures("reliability_rating", 1, 3, 3, 3);
     // a file has now a MAJOR vulnerability --> C (3)
     expectMeasures("security_rating", 1, 3, 3, 3);
+    assertQualityGate("WARN");
 
-    // increase severity of a bug to BLOCKER
-    issue = getFirstIssue(FILE_WITH_THREE_LINES_KEY, "BUG");
+    // increase severity of a vulnerability to BLOCKER
+    issue = getFirstIssue(FILE_WITH_THREE_LINES_KEY, "VULNERABILITY");
     changeSeverity(issue, "BLOCKER");
     expectMeasures("bugs", 0, 2, 2, 2);
     expectMeasures("vulnerabilities", 0, 1, 1, 1);
     expectMeasures("violations", 0, 3, 3, 3);
-    // highest severity of bugs is now BLOCKER --> reliability rating goes E (5)
-    expectMeasures("reliability_rating", 1, 5, 5, 5);
-    expectMeasures("security_rating", 1, 3, 3, 3);
-
+    expectMeasures("reliability_rating", 1, 3, 3, 3);
+    // highest severity of vulnerabilities is now BLOCKER --> security rating goes E (5)
+    expectMeasures("security_rating", 1, 5, 5, 5);
+    assertQualityGate("ERROR");
 
     // no changes after new analysis
     MeasuresDump dumpBeforeAnalysis = dump();
@@ -144,6 +154,10 @@ public class LiveMeasuresTest {
     assertThat(Double.parseDouble(loadMeasure(PROJECT_KEY, metric).getValue()))
       .as("Value of measure " + metric)
       .isEqualTo(projectExpectedValue);
+  }
+
+  private void assertQualityGate(String expectedQualityGate) {
+    assertThat(loadMeasure(PROJECT_KEY, "alert_status").getValue()).isEqualTo(expectedQualityGate);
   }
 
   private Measures.Measure loadMeasure(String componentKey, String metricKey) {
