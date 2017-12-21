@@ -30,11 +30,19 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.sonarqube.qa.util.Tester;
 import org.sonarqube.tests.Category3Suite;
+import org.sonarqube.ws.Issues.Issue;
+import org.sonarqube.ws.Organizations.Organization;
+import org.sonarqube.ws.Projects.CreateWsResponse.Project;
+import org.sonarqube.ws.Qualityprofiles.CreateWsResponse.QualityProfile;
 import org.sonarqube.ws.Webhooks;
 import org.sonarqube.ws.client.HttpException;
 import org.sonarqube.ws.client.WsClient;
+import org.sonarqube.ws.client.issues.SearchRequest;
+import org.sonarqube.ws.client.issues.SetSeverityRequest;
 import org.sonarqube.ws.client.projects.DeleteRequest;
 import org.sonarqube.ws.client.settings.ResetRequest;
 import org.sonarqube.ws.client.settings.SetRequest;
@@ -57,20 +65,22 @@ public class WebhooksTest {
 
   @ClassRule
   public static Orchestrator orchestrator = Category3Suite.ORCHESTRATOR;
-
   @ClassRule
   public static ExternalServer externalServer = new ExternalServer();
+
+  @Rule
+  public Tester tester = new Tester(orchestrator);
 
   private WsClient adminWs = ItUtils.newAdminWsClient(orchestrator);
 
   @Before
-  public void setUp() throws Exception {
+  public void setUp() {
     externalServer.clear();
   }
 
   @Before
   @After
-  public void reset() throws Exception {
+  public void reset() {
     disableGlobalWebhooks();
     try {
       // delete project and related properties/webhook deliveries
@@ -213,6 +223,39 @@ public class WebhooksTest {
 
     assertThat(externalServer.getPayloadRequests()).isEmpty();
     assertThat(getPersistedDeliveries()).isEmpty();
+  }
+
+  @Test
+  public void send_webhook_on_issue_change() throws InterruptedException {
+    Organization defaultOrganization = tester.organizations().getDefaultOrganization();
+    Project wsProject = tester.projects().provision(r -> r.setProject(PROJECT_KEY).setName(PROJECT_NAME));
+    enableProjectWebhooks(PROJECT_KEY, new Webhook("Burgr", externalServer.urlFor("/burgr")));
+    QualityProfile qualityProfile = tester.qProfiles().createXooProfile(defaultOrganization);
+    tester.qProfiles().activateRule(qualityProfile, "xoo:OneIssuePerLine");
+    tester.qProfiles().assignQProfileToProject(qualityProfile, wsProject);
+
+    analyseProject();
+    waitUntilAllWebHooksCalled(1);
+    externalServer.clear();
+    Issue firstIssue = tester.wsClient().issues().search(new SearchRequest()).getIssues(0);
+    tester.wsClient().issues().setSeverity(new SetSeverityRequest().setIssue(firstIssue.getKey()).setSeverity("INFO"));
+
+    waitUntilAllWebHooksCalled(1);
+    PayloadRequest request = externalServer.getPayloadRequests().get(0);
+    assertThat(request.getHttpHeaders().get("X-SonarQube-Project")).isEqualTo(PROJECT_KEY);
+
+    // verify content of payload
+    Map<String, Object> payload = jsonToMap(request.getJson());
+    assertThat(payload.get("status")).isEqualTo("SUCCESS");
+    assertThat(payload.get("analysedAt")).isNotNull();
+    Map<String, String> project = (Map<String, String>) payload.get("project");
+    assertThat(project.get("key")).isEqualTo(PROJECT_KEY);
+    assertThat(project.get("name")).isEqualTo(PROJECT_NAME);
+    assertThat(project.get("url")).isEqualTo(orchestrator.getServer().getUrl() + "/dashboard?id=" + PROJECT_KEY);
+    Map<String, Object> gate = (Map<String, Object>) payload.get("qualityGate");
+    assertThat(gate.get("name")).isEqualTo("Sonar way");
+    assertThat(gate.get("status")).isEqualTo("ERROR");
+    assertThat(gate.get("conditions")).isNotNull();
   }
 
   private void analyseProject() {
