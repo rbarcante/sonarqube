@@ -20,33 +20,45 @@
 package org.sonar.server.computation.task.projectanalysis.qualitygate;
 
 import java.util.Optional;
-import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
+import org.sonar.server.qualitygate.EvaluatedQualityGate;
 
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 public class QualityGateHolderImpl implements MutableQualityGateHolder {
-  private boolean initialized = false;
-  @CheckForNull
+  @Nullable
   private Optional<QualityGate> qualityGate;
+  @Nullable
+  private Optional<EvaluatedQualityGate> evaluation;
 
   @Override
-  public void setQualityGate(QualityGate qualityGate) {
+  public void setQualityGate(QualityGate g) {
     // fail fast
-    requireNonNull(qualityGate);
-    checkNotInitialized();
+    requireNonNull(g);
+    checkState(qualityGate == null, "QualityGateHolder can be initialized only once");
 
-    this.initialized = true;
-    this.qualityGate = Optional.of(qualityGate);
-  }
-
-  private void checkNotInitialized() {
-    checkState(!initialized, "QualityGateHolder can be initialized only once");
+    this.qualityGate = Optional.of(g);
   }
 
   @Override
   public Optional<QualityGate> getQualityGate() {
-    checkState(initialized, "QualityGate has not been set yet");
+    checkState(qualityGate != null, "QualityGate has not been set yet");
     return qualityGate;
+  }
+
+  @Override
+  public void setEvaluation(EvaluatedQualityGate g) {
+    // fail fast
+    requireNonNull(g);
+    checkState(evaluation == null, "QualityGateHolder evaluation can be initialized only once");
+
+    this.evaluation = Optional.of(g);
+  }
+
+  @Override
+  public Optional<EvaluatedQualityGate> getEvaluation() {
+    checkState(evaluation != null, "Evaluation of QualityGate has not been set yet");
+    return evaluation;
   }
 }

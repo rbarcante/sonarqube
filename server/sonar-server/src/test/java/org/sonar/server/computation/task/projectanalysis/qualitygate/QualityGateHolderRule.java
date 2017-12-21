@@ -22,12 +22,15 @@ package org.sonar.server.computation.task.projectanalysis.qualitygate;
 import java.util.Optional;
 import javax.annotation.Nullable;
 import org.junit.rules.ExternalResource;
+import org.sonar.server.qualitygate.EvaluatedQualityGate;
 
 import static com.google.common.base.Preconditions.checkState;
 
 public class QualityGateHolderRule extends ExternalResource implements QualityGateHolder {
   @Nullable
   private Optional<QualityGate> qualityGate;
+  @Nullable
+  private Optional<EvaluatedQualityGate> evaluation;
 
   public void setQualityGate(@Nullable QualityGate qualityGate) {
     this.qualityGate = Optional.ofNullable(qualityGate);
@@ -39,6 +42,16 @@ public class QualityGateHolderRule extends ExternalResource implements QualityGa
     return qualityGate;
   }
 
+  public void setEvaluation(@Nullable EvaluatedQualityGate e) {
+    this.evaluation = Optional.ofNullable(e);
+  }
+
+  @Override
+  public Optional<EvaluatedQualityGate> getEvaluation() {
+    checkState(evaluation != null, "EvaluatedQualityGate has not been initialized");
+    return evaluation;
+  }
+
   @Override
   protected void after() {
     reset();
@@ -46,5 +59,6 @@ public class QualityGateHolderRule extends ExternalResource implements QualityGa
 
   public void reset() {
     this.qualityGate = null;
+    this.evaluation = null;
   }
 }
