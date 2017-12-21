@@ -19,7 +19,7 @@
  */
 package org.sonar.server.computation.task.projectanalysis.qualitygate;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 
 public interface QualityGateHolder {
   /**

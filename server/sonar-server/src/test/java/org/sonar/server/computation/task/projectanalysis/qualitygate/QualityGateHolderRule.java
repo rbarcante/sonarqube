@@ -19,17 +19,18 @@
  */
 package org.sonar.server.computation.task.projectanalysis.qualitygate;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 import javax.annotation.Nullable;
 import org.junit.rules.ExternalResource;
 
 import static com.google.common.base.Preconditions.checkState;
 
 public class QualityGateHolderRule extends ExternalResource implements QualityGateHolder {
+  @Nullable
   private Optional<QualityGate> qualityGate;
 
   public void setQualityGate(@Nullable QualityGate qualityGate) {
-    this.qualityGate = Optional.fromNullable(qualityGate);
+    this.qualityGate = Optional.ofNullable(qualityGate);
   }
 
   @Override

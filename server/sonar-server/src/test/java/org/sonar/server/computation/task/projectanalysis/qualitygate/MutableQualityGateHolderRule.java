@@ -19,7 +19,7 @@
  */
 package org.sonar.server.computation.task.projectanalysis.qualitygate;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 import org.junit.rules.ExternalResource;
 
 public class MutableQualityGateHolderRule extends ExternalResource implements MutableQualityGateHolder {
@@ -28,11 +28,6 @@ public class MutableQualityGateHolderRule extends ExternalResource implements Mu
   @Override
   public void setQualityGate(QualityGate qualityGate) {
     delegate.setQualityGate(qualityGate);
-  }
-
-  @Override
-  public void setNoQualityGate() {
-    delegate.setNoQualityGate();
   }
 
   @Override

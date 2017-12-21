@@ -23,11 +23,10 @@ import java.util.Collections;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.guava.api.Assertions.assertThat;
 
 public class QualityGateHolderImplTest {
 
-  public static final QualityGate QUALITY_GATE = new QualityGate(4612, "name", Collections.<Condition>emptyList());
+  private static final QualityGate QUALITY_GATE = new QualityGate(4612, "name", Collections.emptyList());
 
   @Test(expected = IllegalStateException.class)
   public void getQualityGate_throws_ISE_if_QualityGate_not_set() {
@@ -54,15 +53,6 @@ public class QualityGateHolderImplTest {
     holder.setQualityGate(QUALITY_GATE);
 
     assertThat(holder.getQualityGate().get()).isSameAs(QUALITY_GATE);
-  }
-
-  @Test
-  public void getQualityGate_returns_absent_if_holder_initialized_with_setNoQualityGate() {
-    QualityGateHolderImpl holder = new QualityGateHolderImpl();
-
-    holder.setNoQualityGate();
-
-    assertThat(holder.getQualityGate()).isAbsent();
   }
 
 }

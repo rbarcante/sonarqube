@@ -19,11 +19,9 @@
  */
 package org.sonar.server.computation.task.projectanalysis.qualitygate;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 import javax.annotation.CheckForNull;
 
-import static com.google.common.base.Optional.absent;
-import static com.google.common.base.Optional.of;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
@@ -39,15 +37,7 @@ public class QualityGateHolderImpl implements MutableQualityGateHolder {
     checkNotInitialized();
 
     this.initialized = true;
-    this.qualityGate = of(qualityGate);
-  }
-
-  @Override
-  public void setNoQualityGate() {
-    checkNotInitialized();
-
-    this.initialized = true;
-    this.qualityGate = absent();
+    this.qualityGate = Optional.of(qualityGate);
   }
 
   private void checkNotInitialized() {
