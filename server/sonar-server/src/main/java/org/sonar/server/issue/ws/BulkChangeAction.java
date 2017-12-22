@@ -53,10 +53,10 @@ import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.server.issue.Action;
 import org.sonar.server.issue.AddTagsAction;
 import org.sonar.server.issue.AssignAction;
+import org.sonar.server.issue.IssueChangePostProcessor;
 import org.sonar.server.issue.IssueStorage;
 import org.sonar.server.issue.RemoveTagsAction;
 import org.sonar.server.issue.notification.IssueChangeNotification;
-import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Issues;
@@ -105,17 +105,17 @@ public class BulkChangeAction implements IssuesWsAction {
   private final IssueStorage issueStorage;
   private final NotificationManager notificationService;
   private final List<Action> actions;
-  private final LiveMeasureComputer liveMeasureComputer;
+  private final IssueChangePostProcessor issueChangePostProcessor;
 
   public BulkChangeAction(System2 system2, UserSession userSession, DbClient dbClient, IssueStorage issueStorage, NotificationManager notificationService,
-    List<Action> actions, LiveMeasureComputer liveMeasureComputer) {
+    List<Action> actions, IssueChangePostProcessor issueChangePostProcessor) {
     this.system2 = system2;
     this.userSession = userSession;
     this.dbClient = dbClient;
     this.issueStorage = issueStorage;
     this.notificationService = notificationService;
     this.actions = actions;
-    this.liveMeasureComputer = liveMeasureComputer;
+    this.issueChangePostProcessor = issueChangePostProcessor;
   }
 
   @Override
@@ -209,8 +209,8 @@ public class BulkChangeAction implements IssuesWsAction {
       .collect(Collectors.toSet());
     List<ComponentDto> touchedComponents = touchedComponentUuids.stream()
       .map(data.componentsByUuid::get)
-      .collect(Collectors.toList());
-    liveMeasureComputer.refresh(dbSession, touchedComponents);
+      .collect(MoreCollectors.toList(touchedComponentUuids.size()));
+    issueChangePostProcessor.process(dbSession, touchedComponents);
   }
 
   private static Predicate<DefaultIssue> bulkChange(IssueChangeContext issueChangeContext, BulkChangeData bulkChangeData, BulkChangeResult result) {

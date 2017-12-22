@@ -45,10 +45,10 @@ import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueFinder;
 import org.sonar.server.issue.IssueUpdater;
 import org.sonar.server.issue.ServerIssueStorage;
+import org.sonar.server.issue.TestIssueChangePostProcessor;
 import org.sonar.server.issue.index.IssueIndexDefinition;
 import org.sonar.server.issue.index.IssueIndexer;
 import org.sonar.server.issue.index.IssueIteratorFactory;
-import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
@@ -92,14 +92,14 @@ public class SetSeverityActionTest {
   private ArgumentCaptor<SearchResponseData> preloadedSearchResponseDataCaptor = ArgumentCaptor.forClass(SearchResponseData.class);
 
   private IssueIndexer issueIndexer = new IssueIndexer(esTester.client(), dbClient, new IssueIteratorFactory(dbClient));
-  private LiveMeasureComputer liveMeasureComputer = mock(LiveMeasureComputer.class);
+  private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private WsActionTester tester = new WsActionTester(new SetSeverityAction(userSession, dbClient, new IssueFinder(dbClient, userSession), new IssueFieldsSetter(),
     new IssueUpdater(dbClient,
-      new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient, issueIndexer), mock(NotificationManager.class), liveMeasureComputer),
+      new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient, issueIndexer), mock(NotificationManager.class), issueChangePostProcessor),
     responseWriter));
 
   @Test
-  public void set_severity() throws Exception {
+  public void set_severity() {
     IssueDto issueDto = issueDbTester.insertIssue(newIssue().setSeverity(MAJOR));
     setUserWithBrowseAndAdministerIssuePermission(issueDto);
 
@@ -111,10 +111,13 @@ public class SetSeverityActionTest {
     IssueDto issueReloaded = dbClient.issueDao().selectByKey(dbTester.getSession(), issueDto.getKey()).get();
     assertThat(issueReloaded.getSeverity()).isEqualTo(MINOR);
     assertThat(issueReloaded.isManualSeverity()).isTrue();
+    assertThat(issueChangePostProcessor.calledComponents())
+      .extracting(ComponentDto::uuid)
+      .containsExactlyInAnyOrder(issueDto.getComponentUuid());
   }
 
   @Test
-  public void insert_entry_in_changelog_when_setting_severity() throws Exception {
+  public void insert_entry_in_changelog_when_setting_severity() {
     IssueDto issueDto = issueDbTester.insertIssue(newIssue().setSeverity(MAJOR));
     setUserWithBrowseAndAdministerIssuePermission(issueDto);
 
@@ -138,13 +141,13 @@ public class SetSeverityActionTest {
   }
 
   @Test
-  public void fail_when_not_authenticated() throws Exception {
+  public void fail_when_not_authenticated() {
     expectedException.expect(UnauthorizedException.class);
     call("ABCD", MAJOR);
   }
 
   @Test
-  public void fail_when_missing_browse_permission() throws Exception {
+  public void fail_when_missing_browse_permission() {
     IssueDto issueDto = issueDbTester.insertIssue();
     logInAndAddProjectPermission(issueDto, ISSUE_ADMIN);
 
@@ -153,7 +156,7 @@ public class SetSeverityActionTest {
   }
 
   @Test
-  public void fail_when_missing_administer_issue_permission() throws Exception {
+  public void fail_when_missing_administer_issue_permission() {
     IssueDto issueDto = issueDbTester.insertIssue();
     logInAndAddProjectPermission(issueDto, USER);
 

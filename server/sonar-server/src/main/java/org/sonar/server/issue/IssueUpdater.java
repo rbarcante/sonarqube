@@ -32,7 +32,6 @@ import org.sonar.db.issue.IssueDto;
 import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.server.issue.notification.IssueChangeNotification;
 import org.sonar.server.issue.ws.SearchResponseData;
-import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 
 import static java.util.Collections.singleton;
@@ -43,29 +42,29 @@ public class IssueUpdater {
   private final DbClient dbClient;
   private final IssueStorage issueStorage;
   private final NotificationManager notificationService;
-  private final LiveMeasureComputer liveMeasureComputer;
+  private final IssueChangePostProcessor issueChangePostProcessor;
 
   public IssueUpdater(DbClient dbClient, IssueStorage issueStorage, NotificationManager notificationService,
-    LiveMeasureComputer liveMeasureComputer) {
+    IssueChangePostProcessor issueChangePostProcessor) {
     this.dbClient = dbClient;
     this.issueStorage = issueStorage;
     this.notificationService = notificationService;
-    this.liveMeasureComputer = liveMeasureComputer;
+    this.issueChangePostProcessor = issueChangePostProcessor;
   }
 
   /**
    * Same as {@link #saveIssue(DbSession, DefaultIssue, IssueChangeContext, String)} but populates the specified
    * {@link SearchResponseData} with the DTOs (rule and components) retrieved from DB to save the issue.
    */
-  public SearchResponseData saveIssueAndPreloadSearchResponseData(DbSession session, DefaultIssue issue, IssueChangeContext context,
+  public SearchResponseData saveIssueAndPreloadSearchResponseData(DbSession dbSession, DefaultIssue issue, IssueChangeContext context,
     @Nullable String comment, boolean refreshMeasures) {
-    Optional<RuleDefinitionDto> rule = getRuleByKey(session, issue.getRuleKey());
-    ComponentDto project = dbClient.componentDao().selectOrFailByUuid(session, issue.projectUuid());
-    ComponentDto component = dbClient.componentDao().selectOrFailByUuid(session, issue.componentUuid());
-    IssueDto issueDto = saveIssue(session, issue, context, comment, rule, project, component);
+    Optional<RuleDefinitionDto> rule = getRuleByKey(dbSession, issue.getRuleKey());
+    ComponentDto project = dbClient.componentDao().selectOrFailByUuid(dbSession, issue.projectUuid());
+    ComponentDto component = dbClient.componentDao().selectOrFailByUuid(dbSession, issue.componentUuid());
+    IssueDto issueDto = doSaveIssue(dbSession, issue, context, comment, rule, project, component);
 
     if (refreshMeasures) {
-      liveMeasureComputer.refresh(session, component);
+      issueChangePostProcessor.process(dbSession, singleton(component));
     }
 
     SearchResponseData preloadedSearchResponseData = new SearchResponseData(issueDto);
@@ -79,10 +78,10 @@ public class IssueUpdater {
     Optional<RuleDefinitionDto> rule = getRuleByKey(session, issue.getRuleKey());
     ComponentDto project = dbClient.componentDao().selectOrFailByUuid(session, issue.projectUuid());
     ComponentDto component = dbClient.componentDao().selectOrFailByUuid(session, issue.componentUuid());
-    return saveIssue(session, issue, context, comment, rule, project, component);
+    return doSaveIssue(session, issue, context, comment, rule, project, component);
   }
 
-  private IssueDto saveIssue(DbSession session, DefaultIssue issue, IssueChangeContext context, @Nullable String comment,
+  private IssueDto doSaveIssue(DbSession session, DefaultIssue issue, IssueChangeContext context, @Nullable String comment,
     Optional<RuleDefinitionDto> rule, ComponentDto project, ComponentDto component) {
     IssueDto issueDto = issueStorage.save(session, issue);
     notificationService.scheduleForSending(new IssueChangeNotification()
@@ -96,7 +95,7 @@ public class IssueUpdater {
   }
 
   private Optional<RuleDefinitionDto> getRuleByKey(DbSession session, RuleKey ruleKey) {
-    Optional<RuleDefinitionDto> rule = Optional.ofNullable(dbClient.ruleDao().selectDefinitionByKey(session, ruleKey).orElse(null));
+    Optional<RuleDefinitionDto> rule = dbClient.ruleDao().selectDefinitionByKey(session, ruleKey);
     return (rule.isPresent() && rule.get().getStatus() != RuleStatus.REMOVED) ? rule : Optional.empty();
   }
 

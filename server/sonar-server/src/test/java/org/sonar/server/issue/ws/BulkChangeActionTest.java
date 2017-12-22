@@ -20,7 +20,6 @@
 package org.sonar.server.issue.ws;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -36,7 +35,6 @@ import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbClient;
-import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueChangeDto;
@@ -50,6 +48,7 @@ import org.sonar.server.issue.Action;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueStorage;
 import org.sonar.server.issue.ServerIssueStorage;
+import org.sonar.server.issue.TestIssueChangePostProcessor;
 import org.sonar.server.issue.TransitionService;
 import org.sonar.server.issue.index.IssueIndexDefinition;
 import org.sonar.server.issue.index.IssueIndexer;
@@ -57,7 +56,6 @@ import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssueChangeNotification;
 import org.sonar.server.issue.workflow.FunctionExecutor;
 import org.sonar.server.issue.workflow.IssueWorkflow;
-import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
@@ -74,10 +72,8 @@ import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
 import static org.sonar.api.issue.Issue.STATUS_CLOSED;
@@ -117,7 +113,7 @@ public class BulkChangeActionTest {
   private IssueStorage issueStorage = new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient,
     new IssueIndexer(es.client(), dbClient, new IssueIteratorFactory(dbClient)));
   private NotificationManager notificationManager = mock(NotificationManager.class);
-  private LiveMeasureComputer liveMeasureComputer = mock(LiveMeasureComputer.class);
+  private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private List<Action> actions = new ArrayList<>();
 
   private RuleDto rule;
@@ -126,7 +122,7 @@ public class BulkChangeActionTest {
   private ComponentDto file;
   private UserDto user;
 
-  private WsActionTester tester = new WsActionTester(new BulkChangeAction(system2, userSession, dbClient, issueStorage, notificationManager, actions, liveMeasureComputer));
+  private WsActionTester tester = new WsActionTester(new BulkChangeAction(system2, userSession, dbClient, issueStorage, notificationManager, actions, issueChangePostProcessor));
 
   @Before
   public void setUp() throws Exception {
@@ -155,7 +151,7 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getType()).isEqualTo(RuleType.CODE_SMELL.getDbConstant());
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -173,7 +169,7 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getSeverity()).isEqualTo(MINOR);
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -192,7 +188,7 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
     // no need to refresh measures
-    verifyMeasuresNotRefreshed();
+    verifyPostProcessorNotCalled();
   }
 
   @Test
@@ -211,7 +207,7 @@ public class BulkChangeActionTest {
     assertThat(reloaded.getUpdatedAt()).isEqualTo(NOW);
 
     // no need to refresh measures
-    verifyMeasuresNotRefreshed();
+    verifyPostProcessorNotCalled();
   }
 
   @Test
@@ -230,7 +226,7 @@ public class BulkChangeActionTest {
     assertThat(issueComment.getUserLogin()).isEqualTo("john");
     assertThat(issueComment.getChangeData()).isEqualTo("type was badly defined");
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -258,7 +254,7 @@ public class BulkChangeActionTest {
         tuple(issue2.getKey(), userToAssign.getLogin(), VULNERABILITY.getDbConstant(), MINOR, NOW),
         tuple(issue3.getKey(), userToAssign.getLogin(), VULNERABILITY.getDbConstant(), MINOR, NOW));
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -312,7 +308,7 @@ public class BulkChangeActionTest {
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("changeAuthor")).isEqualTo(user.getLogin());
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("branch")).isEqualTo(branchName);
 
-    verifyMeasuresRefreshed(fileOnBranch);
+    verifyPostProcessorCalled(fileOnBranch);
   }
 
   @Test
@@ -334,7 +330,7 @@ public class BulkChangeActionTest {
     assertThat(issueChangeNotificationCaptor.getAllValues()).hasSize(1);
     assertThat(issueChangeNotificationCaptor.getValue().getFieldValue("key")).isEqualTo(issue3.getKey());
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -360,7 +356,7 @@ public class BulkChangeActionTest {
         tuple(issue2.getKey(), BUG.getDbConstant(), issue3.getUpdatedAt()));
 
     // file2 is not refreshed
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -386,7 +382,7 @@ public class BulkChangeActionTest {
         tuple(issue3.getKey(), VULNERABILITY.getDbConstant(), issue3.getUpdatedAt()));
 
     // file2 is not refreshed
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -408,7 +404,7 @@ public class BulkChangeActionTest {
     assertThat(dbClient.issueChangeDao().selectByTypeAndIssueKeys(db.getSession(), singletonList(issue2.getKey()), TYPE_COMMENT)).isEmpty();
     assertThat(dbClient.issueChangeDao().selectByTypeAndIssueKeys(db.getSession(), singletonList(issue3.getKey()), TYPE_COMMENT)).isEmpty();
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -434,7 +430,7 @@ public class BulkChangeActionTest {
         tuple(notAuthorizedIssue1.getKey(), BUG.getDbConstant(), notAuthorizedIssue1.getUpdatedAt()),
         tuple(notAuthorizedIssue2.getKey(), BUG.getDbConstant(), notAuthorizedIssue2.getUpdatedAt()));
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -461,7 +457,7 @@ public class BulkChangeActionTest {
         tuple(authorizedIssue1.getKey(), VULNERABILITY.getDbConstant(), NOW),
         tuple(notAuthorizedIssue1.getKey(), BUG.getDbConstant(), notAuthorizedIssue1.getUpdatedAt()),
         tuple(notAuthorizedIssue2.getKey(), BUG.getDbConstant(), notAuthorizedIssue2.getUpdatedAt()));
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -489,7 +485,7 @@ public class BulkChangeActionTest {
         tuple(notAuthorizedIssue1.getKey(), MAJOR, notAuthorizedIssue1.getUpdatedAt()),
         tuple(notAuthorizedIssue2.getKey(), MAJOR, notAuthorizedIssue2.getUpdatedAt()));
 
-    verifyMeasuresRefreshed(file);
+    verifyPostProcessorCalled(file);
   }
 
   @Test
@@ -577,16 +573,12 @@ public class BulkChangeActionTest {
     return db.getDbClient().issueDao().selectByKeys(db.getSession(), asList(issueKeys));
   }
 
-  private void verifyMeasuresRefreshed(ComponentDto... components) {
-    Class<Collection<ComponentDto>> collectionClass = (Class<Collection<ComponentDto>>) (Class) Collection.class;
-    ArgumentCaptor<Collection<ComponentDto>> called = ArgumentCaptor.forClass(collectionClass);
-    verify(liveMeasureComputer).refresh(any(DbSession.class), called.capture());
-
-    assertThat(called.getValue()).containsExactlyInAnyOrder(components);
+  private void verifyPostProcessorCalled(ComponentDto... components) {
+    assertThat(issueChangePostProcessor.calledComponents()).containsExactlyInAnyOrder(components);
   }
 
-  private void verifyMeasuresNotRefreshed() {
-    verifyZeroInteractions(liveMeasureComputer);
+  private void verifyPostProcessorNotCalled() {
+    assertThat(issueChangePostProcessor.wasCalled()).isFalse();
   }
 
   private IssueDto newUnresolvedIssue(RuleDto rule, ComponentDto file, ComponentDto project) {

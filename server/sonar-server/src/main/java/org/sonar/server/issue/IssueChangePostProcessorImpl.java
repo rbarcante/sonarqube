@@ -17,31 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.server.measure.live;
+package org.sonar.server.issue;
 
 import java.util.Collection;
 import java.util.List;
-import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
+import org.sonar.server.qualitygate.changeevent.QGChangeEventListeners;
+import org.sonar.server.qualitygate.changeevent.Trigger;
 
-/**
- * Refresh and persist the measures of some files, directories, modules
- * or projects.
- *
- * Touching a file updates the related directory, module and project.
- * Status of Quality gate is refreshed but webhooks are not triggered.
- */
-@ServerSide
-public interface LiveMeasureComputer {
+public class IssueChangePostProcessorImpl implements IssueChangePostProcessor {
 
-  /**
-   * Refresh measures of a collection of components and
-   * their ancestors. Components may be on different projects or
-   * different organizations.
-   * Short-living and long-living branches are accepted.
-   */
-  List<QGChangeEvent> refresh(DbSession dbSession, Collection<ComponentDto> components);
+  private final LiveMeasureComputer liveMeasureComputer;
+  private final QGChangeEventListeners qualityGateListeners;
 
+  public IssueChangePostProcessorImpl(LiveMeasureComputer liveMeasureComputer, QGChangeEventListeners qualityGateListeners) {
+    this.liveMeasureComputer = liveMeasureComputer;
+    this.qualityGateListeners = qualityGateListeners;
+  }
+
+  @Override
+  public void process(DbSession dbSession, Collection<ComponentDto> components) {
+    List<QGChangeEvent> gateChangeEvents = liveMeasureComputer.refresh(dbSession, components);
+    qualityGateListeners.broadcast(Trigger.ISSUE_CHANGE, gateChangeEvents);
+  }
 }

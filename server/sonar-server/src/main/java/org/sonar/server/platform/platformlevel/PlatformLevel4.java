@@ -70,6 +70,7 @@ import org.sonar.server.health.NodeHealthModule;
 import org.sonar.server.issue.AddTagsAction;
 import org.sonar.server.issue.AssignAction;
 import org.sonar.server.issue.CommentAction;
+import org.sonar.server.issue.IssueChangePostProcessorImpl;
 import org.sonar.server.issue.RemoveTagsAction;
 import org.sonar.server.issue.SetSeverityAction;
 import org.sonar.server.issue.SetTypeAction;
@@ -447,6 +448,7 @@ public class PlatformLevel4 extends PlatformLevel {
       TransitionAction.class,
       AddTagsAction.class,
       RemoveTagsAction.class,
+      IssueChangePostProcessorImpl.class,
 
       // technical debt
       DebtModelPluginRepository.class,

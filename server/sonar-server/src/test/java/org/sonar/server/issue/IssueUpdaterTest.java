@@ -45,7 +45,6 @@ import org.sonar.server.issue.index.IssueIndexer;
 import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssueChangeNotification;
 import org.sonar.server.issue.ws.SearchResponseData;
-import org.sonar.server.measure.live.LiveMeasureComputer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
@@ -84,12 +83,12 @@ public class IssueUpdaterTest {
   private ArgumentCaptor<IssueChangeNotification> notificationArgumentCaptor = ArgumentCaptor.forClass(IssueChangeNotification.class);
 
   private IssueIndexer issueIndexer = new IssueIndexer(esTester.client(), dbClient, new IssueIteratorFactory(dbClient));
-  private LiveMeasureComputer liveMeasureComputer = mock(LiveMeasureComputer.class);
+  private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private IssueUpdater underTest = new IssueUpdater(dbClient,
-    new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient, issueIndexer), notificationManager, liveMeasureComputer);
+    new ServerIssueStorage(system2, new DefaultRuleFinder(dbClient, defaultOrganizationProvider), dbClient, issueIndexer), notificationManager, issueChangePostProcessor);
 
   @Test
-  public void update_issue() throws Exception {
+  public void update_issue() {
     DefaultIssue issue = issueDbTester.insertIssue(newIssue().setSeverity(MAJOR)).toDefaultIssue();
     IssueChangeContext context = IssueChangeContext.createUser(new Date(), "john");
     issueFieldsSetter.setSeverity(issue, BLOCKER, context);
@@ -101,7 +100,7 @@ public class IssueUpdaterTest {
   }
 
   @Test
-  public void verify_notification() throws Exception {
+  public void verify_notification() {
     RuleDto rule = ruleDbTester.insertRule(newRuleDto());
     ComponentDto project = componentDbTester.insertPrivateProject();
     ComponentDto file = componentDbTester.insertComponent(newFileDto(project));
@@ -126,7 +125,7 @@ public class IssueUpdaterTest {
   }
 
   @Test
-  public void verify_notification_on_branch() throws Exception {
+  public void verify_notification_on_branch() {
     RuleDto rule = ruleDbTester.insertRule(newRuleDto());
     ComponentDto project = componentDbTester.insertMainBranch();
     ComponentDto branch = componentDbTester.insertProjectBranch(project);
@@ -146,7 +145,7 @@ public class IssueUpdaterTest {
   }
 
   @Test
-  public void verify_notification_when_issue_is_linked_on_removed_rule() throws Exception {
+  public void verify_notification_when_issue_is_linked_on_removed_rule() {
     RuleDto rule = ruleDbTester.insertRule(newRuleDto().setStatus(RuleStatus.REMOVED));
     ComponentDto project = componentDbTester.insertPrivateProject();
     ComponentDto file = componentDbTester.insertComponent(newFileDto(project));
@@ -189,7 +188,7 @@ public class IssueUpdaterTest {
     assertThat(preloadedSearchResponseData.getComponents())
       .extracting(ComponentDto::uuid)
       .containsOnly(project.uuid(), file.uuid());
-    verify(liveMeasureComputer).refresh(dbTester.getSession(), file);
+    assertThat(issueChangePostProcessor.calledComponents()).containsExactlyInAnyOrder(file);
   }
 
   @Test
