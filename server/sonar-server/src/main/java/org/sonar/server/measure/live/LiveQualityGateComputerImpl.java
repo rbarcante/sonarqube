@@ -104,7 +104,7 @@ public class LiveQualityGateComputerImpl implements LiveQualityGateComputer {
   }
 
   @Override
-  public Collection<String> getMetricsRelatedTo(QualityGate gate) {
+  public Set<String> getMetricsRelatedTo(QualityGate gate) {
     Set<String> metricKeys = new HashSet<>();
     metricKeys.add(CoreMetrics.ALERT_STATUS_KEY);
     metricKeys.add(CoreMetrics.QUALITY_GATE_DETAILS_KEY);

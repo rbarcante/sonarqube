@@ -19,7 +19,7 @@
  */
 package org.sonar.server.measure.live;
 
-import java.util.Collection;
+import java.util.Set;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
@@ -35,6 +35,6 @@ public interface LiveQualityGateComputer {
 
   EvaluatedQualityGate refreshGateStatus(ComponentDto project, QualityGate gate, MeasureMatrix measureMatrix);
 
-  Collection<String> getMetricsRelatedTo(QualityGate gate);
+  Set<String> getMetricsRelatedTo(QualityGate gate);
 
 }

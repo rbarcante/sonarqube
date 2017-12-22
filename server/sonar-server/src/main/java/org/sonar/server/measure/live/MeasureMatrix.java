@@ -169,8 +169,6 @@ class MeasureMatrix {
   /**
    * Round a measure value by applying the scale defined on the metric.
    * Example: scale(0.1234) returns 0.12 if metric scale is 2
-   *
-   * @since 7.0
    */
   private static double scale(MetricDto metric, double value) {
     if (metric.getDecimalScale() == null) {

@@ -19,9 +19,9 @@
  */
 package org.sonar.server.qualitygate;
 
-import java.util.Collection;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.server.ServerSide;
@@ -42,7 +42,7 @@ public interface QualityGateEvaluator {
    * for instance "new_lines" for the circuit-breaker on
    * small changesets.
    */
-  Collection<String> getMetricKeys(QualityGate gate);
+  Set<String> getMetricKeys(QualityGate gate);
 
   interface Measures {
     Optional<Measure> get(String metricKey);

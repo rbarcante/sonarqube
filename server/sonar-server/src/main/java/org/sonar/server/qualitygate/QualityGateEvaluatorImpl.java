@@ -78,7 +78,7 @@ public class QualityGateEvaluatorImpl implements QualityGateEvaluator {
   }
 
   @Override
-  public Collection<String> getMetricKeys(QualityGate gate) {
+  public Set<String> getMetricKeys(QualityGate gate) {
     Set<String> metricKeys = new HashSet<>();
     metricKeys.add(CoreMetrics.NEW_LINES_KEY);
     for (Condition condition : gate.getConditions()) {

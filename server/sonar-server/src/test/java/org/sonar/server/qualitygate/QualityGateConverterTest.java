@@ -17,27 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.server.measure.live;
+package org.sonar.server.qualitygate;
 
-import java.util.List;
-import java.util.Set;
-import org.sonar.api.measures.Metric;
+import org.junit.Test;
 
-class TestIssueMetricFormulaFactory implements IssueMetricFormulaFactory {
+public class QualityGateConverterTest {
 
-  private final List<IssueMetricFormula> formulas;
-
-  TestIssueMetricFormulaFactory(List<IssueMetricFormula> formulas) {
-    this.formulas = formulas;
+  @Test
+  public void test_ToJson() {
+    // FIXME
   }
 
-  @Override
-  public List<IssueMetricFormula> getFormulas() {
-    return formulas;
-  }
-
-  @Override
-  public Set<Metric> getFormulaMetrics() {
-    return IssueMetricFormulaFactory.extractMetrics(formulas);
-  }
 }

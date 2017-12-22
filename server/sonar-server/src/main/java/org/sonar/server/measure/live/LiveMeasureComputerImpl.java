@@ -19,7 +19,6 @@
  */
 package org.sonar.server.measure.live;
 
-import com.google.common.collect.Ordering;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -29,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.measures.Metric;
-import org.sonar.api.resources.Qualifiers;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
@@ -143,10 +141,11 @@ public class LiveMeasureComputerImpl implements LiveMeasureComputer {
       // ancestors, excluding self
       componentUuids.addAll(component.getUuidPathAsList());
     }
-    return Ordering
-      .explicit(Qualifiers.ORDERED_BOTTOM_UP)
-      .onResultOf(ComponentDto::qualifier)
-      .sortedCopy(dbClient.componentDao().selectByUuids(dbSession, componentUuids));
+    // Contrary to the formulas in Compute Engine,
+    // measures do not aggregate values of descendant components.
+    // As a consequence nodes do not need to be sorted. Formulas can be applied
+    // on components in any order.
+    return dbClient.componentDao().selectByUuids(dbSession, componentUuids);
   }
 
   private Set<String> getKeysOfAllInvolvedMetrics(QualityGate gate) {

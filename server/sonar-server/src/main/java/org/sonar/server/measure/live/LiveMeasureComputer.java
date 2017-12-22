@@ -28,20 +28,16 @@ import org.sonar.server.qualitygate.changeevent.QGChangeEvent;
 
 /**
  * Refresh and persist the measures of some files, directories, modules
- * or projects.
+ * or projects. Measures include status of quality gate.
  *
  * Touching a file updates the related directory, module and project.
  * Status of Quality gate is refreshed but webhooks are not triggered.
+ *
+ * Branches are supported.
  */
 @ServerSide
 public interface LiveMeasureComputer {
 
-  /**
-   * Refresh measures of a collection of components and
-   * their ancestors. Components may be on different projects or
-   * different organizations.
-   * Short-living and long-living branches are accepted.
-   */
   List<QGChangeEvent> refresh(DbSession dbSession, Collection<ComponentDto> components);
 
 }

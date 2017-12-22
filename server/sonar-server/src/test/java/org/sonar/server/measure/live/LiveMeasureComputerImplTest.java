@@ -50,6 +50,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.sonar.api.resources.Qualifiers.ORDERED_BOTTOM_UP;
 
 public class LiveMeasureComputerImplTest {
 
@@ -80,17 +81,18 @@ public class LiveMeasureComputerImplTest {
   public void compute_and_insert_measures_if_they_dont_exist_yet() {
     markProjectAsAnalyzed(project);
 
-    List<QGChangeEvent> result = run(asList(file1, file2), newIncrementalFormula(), newRatingConstantFormula(Rating.C));
+    List<QGChangeEvent> result = run(asList(file1, file2), newQualifierBasedIntFormula(), newRatingConstantFormula(Rating.C));
 
     // 2 measures per component have been created
+    // Numeric value depends on qualifier (see newQualifierBasedIntFormula())
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(8);
-    assertThatIntMeasureHasValue(file1, 1);
+    assertThatIntMeasureHasValue(file1, ORDERED_BOTTOM_UP.indexOf(Qualifiers.FILE));
     assertThatRatingMeasureHasValue(file1, Rating.C);
-    assertThatIntMeasureHasValue(file2, 2);
+    assertThatIntMeasureHasValue(file2, ORDERED_BOTTOM_UP.indexOf(Qualifiers.FILE));
     assertThatRatingMeasureHasValue(file2, Rating.C);
-    assertThatIntMeasureHasValue(dir, 3);
+    assertThatIntMeasureHasValue(dir, ORDERED_BOTTOM_UP.indexOf(Qualifiers.DIRECTORY));
     assertThatRatingMeasureHasValue(dir, Rating.C);
-    assertThatIntMeasureHasValue(project, 4);
+    assertThatIntMeasureHasValue(project, ORDERED_BOTTOM_UP.indexOf(Qualifiers.PROJECT));
     assertThatRatingMeasureHasValue(project, Rating.C);
     assertThatProjectChanged(result, project);
   }
@@ -104,14 +106,15 @@ public class LiveMeasureComputerImplTest {
     db.measures().insertLiveMeasure(file2, intMetric, m -> m.setValue(42.0));
 
     // generates values 1, 2, 3
-    List<QGChangeEvent> result = run(file1, newIncrementalFormula());
+    List<QGChangeEvent> result = run(file1, newQualifierBasedIntFormula());
 
     assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(4);
     assertThatProjectChanged(result, project);
 
-    assertThatIntMeasureHasValue(file1, 1.0);
-    assertThatIntMeasureHasValue(dir, 2.0);
-    assertThatIntMeasureHasValue(project, 3.0);
+    // Numeric value depends on qualifier (see newQualifierBasedIntFormula())
+    assertThatIntMeasureHasValue(file1, ORDERED_BOTTOM_UP.indexOf(Qualifiers.FILE));
+    assertThatIntMeasureHasValue(dir, ORDERED_BOTTOM_UP.indexOf(Qualifiers.DIRECTORY));
+    assertThatIntMeasureHasValue(project, ORDERED_BOTTOM_UP.indexOf(Qualifiers.PROJECT));
     // untouched
     assertThatIntMeasureHasValue(file2, 42.0);
   }
@@ -168,17 +171,24 @@ public class LiveMeasureComputerImplTest {
   public void refresh_leak_measures() {
     markProjectAsAnalyzed(project);
     db.measures().insertLiveMeasure(project, intMetric, m -> m.setVariation(42.0).setValue(null));
+    db.measures().insertLiveMeasure(project, ratingMetric, m -> m.setVariation((double)Rating.E.getIndex()));
     db.measures().insertLiveMeasure(dir, intMetric, m -> m.setVariation(42.0).setValue(null));
+    db.measures().insertLiveMeasure(dir, ratingMetric, m -> m.setVariation((double)Rating.D.getIndex()));
     db.measures().insertLiveMeasure(file1, intMetric, m -> m.setVariation(42.0).setValue(null));
+    db.measures().insertLiveMeasure(file1, ratingMetric, m -> m.setVariation((double)Rating.C.getIndex()));
 
     // generates values 1, 2, 3 on leak measures
-    List<QGChangeEvent> result = run(file1, newIncrementalLeakFormula());
+    List<QGChangeEvent> result = run(file1, newQualifierBasedIntLeakFormula(), newRatingLeakFormula(Rating.B));
 
-    assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(3);
+    assertThat(db.countRowsOfTable(db.getSession(), "live_measures")).isEqualTo(6);
 
-    assertThatIntMeasureHasLeakValue(file1, 1.0);
-    assertThatIntMeasureHasLeakValue(dir, 2.0);
-    assertThatIntMeasureHasLeakValue(project, 3.0);
+    // Numeric value depends on qualifier (see newQualifierBasedIntLeakFormula())
+    assertThatIntMeasureHasLeakValue(file1, ORDERED_BOTTOM_UP.indexOf(Qualifiers.FILE));
+    assertThatRatingMeasureHasLeakValue(file1, Rating.B);
+    assertThatIntMeasureHasLeakValue(dir, ORDERED_BOTTOM_UP.indexOf(Qualifiers.DIRECTORY));
+    assertThatRatingMeasureHasLeakValue(dir, Rating.B);
+    assertThatIntMeasureHasLeakValue(project, ORDERED_BOTTOM_UP.indexOf(Qualifiers.PROJECT));
+    assertThatRatingMeasureHasLeakValue(project, Rating.B);
     assertThatProjectChanged(result, project);
   }
 
@@ -206,7 +216,7 @@ public class LiveMeasureComputerImplTest {
     ComponentDto fileInProject2 = db.components().insertComponent(ComponentTesting.newFileDto(project2));
     markProjectAsAnalyzed(project2);
 
-    List<QGChangeEvent> result = run(asList(file1, fileInProject2), newQualifierBasedFormula());
+    List<QGChangeEvent> result = run(asList(file1, fileInProject2), newQualifierBasedIntFormula());
 
     // generated values depend on position of qualifier in Qualifiers.ORDERED_BOTTOM_UP (see formula)
     assertThatIntMeasureHasValue(file1, 0);
@@ -226,14 +236,19 @@ public class LiveMeasureComputerImplTest {
   }
 
   @Test
+  public void compute_quality_gate_status() {
+    // FIXME
+  }
+
+  @Test
   public void exception_describes_context_when_a_formula_fails() {
     markProjectAsAnalyzed(project);
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
 
     expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Fail to compute " + metric.getKey() + " on " + file1.getDbKey());
+    expectedException.expectMessage("Fail to compute " + metric.getKey() + " on " + project.getDbKey());
 
-    run(file1, new IssueMetricFormula(metric, false, (context, issueCounter) -> {
+    run(project, new IssueMetricFormula(metric, false, (context, issueCounter) -> {
       throw new NullPointerException("BOOM");
     }));
   }
@@ -287,6 +302,14 @@ public class LiveMeasureComputerImplTest {
     assertThat(measure.getVariation()).isEqualTo(expectedValue);
   }
 
+  private void assertThatRatingMeasureHasLeakValue(ComponentDto component, Rating expectedValue) {
+    LiveMeasureDto measure = db.getDbClient().liveMeasureDao().selectMeasure(db.getSession(), component.uuid(), ratingMetric.getKey()).get();
+    assertThat(measure.getComponentUuid()).isEqualTo(component.uuid());
+    assertThat(measure.getProjectUuid()).isEqualTo(component.projectUuid());
+    assertThat(measure.getMetricId()).isEqualTo(ratingMetric.getId());
+    assertThat(measure.getVariation()).isEqualTo((double) expectedValue.getIndex());
+  }
+
   private IssueMetricFormula newIncrementalFormula() {
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
     AtomicInteger counter = new AtomicInteger();
@@ -317,10 +340,24 @@ public class LiveMeasureComputerImplTest {
     });
   }
 
-  private IssueMetricFormula newQualifierBasedFormula() {
+  private IssueMetricFormula newRatingLeakFormula(Rating rating) {
+    Metric metric = new Metric.Builder(ratingMetric.getKey(), ratingMetric.getShortName(), Metric.ValueType.valueOf(ratingMetric.getValueType())).create();
+    return new IssueMetricFormula(metric, true, (ctx, issues) -> {
+      ctx.setLeakValue(rating);
+    });
+  }
+
+  private IssueMetricFormula newQualifierBasedIntFormula() {
     Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
     return new IssueMetricFormula(metric, false, (ctx, issues) -> {
-      ctx.setValue(Qualifiers.ORDERED_BOTTOM_UP.indexOf(ctx.getComponent().qualifier()));
+      ctx.setValue(ORDERED_BOTTOM_UP.indexOf(ctx.getComponent().qualifier()));
+    });
+  }
+
+  private IssueMetricFormula newQualifierBasedIntLeakFormula() {
+    Metric metric = new Metric.Builder(intMetric.getKey(), intMetric.getShortName(), Metric.ValueType.valueOf(intMetric.getValueType())).create();
+    return new IssueMetricFormula(metric, true, (ctx, issues) -> {
+      ctx.setLeakValue(ORDERED_BOTTOM_UP.indexOf(ctx.getComponent().qualifier()));
     });
   }
 
