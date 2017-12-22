@@ -260,10 +260,10 @@ public class QGChangeEventListenersImplTest {
   private static final String[] STATUSES = Issue.STATUSES.stream().toArray(String[]::new);
   private static int issueIdCounter = 0;
 
-  private static DefaultIssue newDefaultIssue(String componentUuid) {
+  private static DefaultIssue newDefaultIssue(String projectUuid) {
     DefaultIssue defaultIssue = new DefaultIssue();
     defaultIssue.setKey("issue_" + issueIdCounter++);
-    defaultIssue.setComponentUuid(componentUuid);
+    defaultIssue.setProjectUuid(projectUuid);
     defaultIssue.setType(RuleType.values()[new Random().nextInt(RuleType.values().length)]);
     defaultIssue.setStatus(STATUSES[new Random().nextInt(STATUSES.length)]);
     return defaultIssue;
