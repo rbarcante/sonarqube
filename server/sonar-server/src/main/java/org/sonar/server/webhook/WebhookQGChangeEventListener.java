@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.commons.lang.StringUtils;
 import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -77,8 +78,9 @@ public class WebhookQGChangeEventListener implements QGChangeEventListener {
     Map<String, String> analysisProperties = dbClient.analysisPropertiesDao().selectBySnapshotUuid(dbSession, analysis.getUuid())
       .stream()
       .collect(Collectors.toMap(AnalysisPropertyDto::getKey, AnalysisPropertyDto::getValue));
+    String projectUuid = StringUtils.defaultString(branch.getMainBranchProjectUuid(), branch.projectUuid());
     ProjectAnalysis projectAnalysis = new ProjectAnalysis(
-      new Project(branch.getMainBranchProjectUuid(), branch.getKey(), branch.name()),
+      new Project(projectUuid, branch.getKey(), branch.name()),
       null,
       new Analysis(analysis.getUuid(), analysis.getCreatedAt()),
       new Branch(false, shortBranch.getKey(), Branch.Type.SHORT),
